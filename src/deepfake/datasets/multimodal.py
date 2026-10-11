@@ -29,7 +29,10 @@ class MultimodalDataset(Dataset):
     def __init__(self, index_csv: str | Path, split: str | None, cfg: dict, train: bool = False,
                  use_video: bool = True, use_audio: bool = True,
                  frame_transform: Callable[[np.ndarray], np.ndarray] | None = None,
-                 mel_transform: Callable[[np.ndarray], np.ndarray] | None = None):
+                 mel_transform: Callable[[np.ndarray], np.ndarray] | None = None,
+                 frames_per_item: int | None = None):
+        """frames_per_item: in training, randomly pick this many of the stored frames per
+        video (faster epochs + augmentation). Evaluation always uses every stored frame."""
         index_csv = Path(index_csv)
         self.root = index_csv.parent
         df = pd.read_csv(index_csv, keep_default_na=False)
@@ -43,13 +46,19 @@ class MultimodalDataset(Dataset):
         self.df = df.reset_index(drop=True)
         self.train = train
         self.use_video, self.use_audio = use_video, use_audio
-        self.num_frames = cfg["video"]["num_frames"]
+        self.stored_frames = cfg["video"]["num_frames"]
+        self.num_frames = frames_per_item if (train and frames_per_item) else self.stored_frames
         self.face_size = cfg["video"]["face_size"]
         a = cfg["audio"]
         self.n_mels = a["n_mels"]
         self.mel_frames = int(a["window_seconds"] * a["sample_rate"] / a["hop_length"]) + 1
         self.frame_transform, self.mel_transform = frame_transform, mel_transform
-        self.rng = np.random.default_rng()
+
+    @staticmethod
+    def _rng() -> np.random.Generator:
+        # Draw from torch's RNG, which DataLoader seeds differently in every worker
+        # (a numpy generator created in __init__ would repeat across workers).
+        return np.random.default_rng(int(torch.randint(0, 2**31 - 1, (1,))))
 
     def __len__(self) -> int:
         return len(self.df)
@@ -65,7 +74,11 @@ class MultimodalDataset(Dataset):
         if not (self.use_video and rel):
             return frames, mask, False
         faces, _ = load_faces(self.root / rel)
-        faces = faces[:T]
+        if len(faces) > T:
+            if self.num_frames < self.stored_frames:  # training subsample, keep temporal order
+                faces = faces[np.sort(self._rng().choice(len(faces), T, replace=False))]
+            else:
+                faces = faces[:T]
         for i, f in enumerate(faces):
             if self.frame_transform:
                 f = self.frame_transform(f)
@@ -80,7 +93,7 @@ class MultimodalDataset(Dataset):
         mel = np.load(self.root / rel).astype(np.float32)
         if mel.shape[1] == 0:
             return torch.zeros(1, self.n_mels, self.mel_frames), False
-        mel = crop_or_pad(mel, self.mel_frames, random=self.train, rng=self.rng)
+        mel = crop_or_pad(mel, self.mel_frames, random=self.train, rng=self._rng())
         if self.mel_transform:
             mel = self.mel_transform(mel)
         mel = (mel - mel.mean()) / (mel.std() + 1e-5)

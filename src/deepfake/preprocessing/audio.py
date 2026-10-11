@@ -42,8 +42,8 @@ def load_audio(path: str | Path, sample_rate: int = 16000, max_seconds: float | 
 def log_mel(wav: np.ndarray, sample_rate: int = 16000, n_fft: int = 512, win_length: int = 400,
             hop_length: int = 160, n_mels: int = 128) -> np.ndarray:
     """Log-mel spectrogram in dB, shape [n_mels, frames], float16 to halve storage."""
-    if len(wav) < win_length:
-        wav = np.pad(wav, (0, win_length - len(wav)))
+    if len(wav) < n_fft:
+        wav = np.pad(wav, (0, n_fft - len(wav)))
     mel = librosa.feature.melspectrogram(
         y=wav, sr=sample_rate, n_fft=n_fft, win_length=win_length, hop_length=hop_length,
         n_mels=n_mels, power=2.0,

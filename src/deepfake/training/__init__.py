@@ -1,9 +1,10 @@
-"""Training loops.  (Phases 2-4)
+"""Training.
 
-Planned modules:
-  train_visual.py   fine-tune VisualModel on VisualDataset (BCE, AdamW, early stopping on val AUC)
-  train_audio.py    AudioModel: pre-train on ASVspoof 2019 LA, fine-tune on FakeAVCeleb
-  train_fusion.py   MultimodalModel on FakeAVCeleb, branches initialised from the above
+  engine.py        shared loop: device, AMP, checkpoint/resume, early stopping, history
+  tasks.py         per-branch registry (model, dataset, forward fn, label key)
+  train_visual.py  Phase 2: EfficientNet-B0 on face crops          (done)
+  train_audio.py   Phase 3: ResNet-18 on log-mel spectrograms      (todo)
+  train_fusion.py  Phase 4: multimodal fusion                      (todo)
 
-Checkpoints go to <data_root>/checkpoints/ every epoch so Colab disconnects can resume.
+Checkpoints go to <data_root>/checkpoints/<run-name>/ every epoch so Colab disconnects can resume.
 """

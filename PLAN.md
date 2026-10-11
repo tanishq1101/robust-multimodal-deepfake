@@ -1,7 +1,8 @@
 # Robust Multimodal Deepfake Analysis: Project Plan
 
 **Type:** College project · **Compute:** Google Colab (GPU) for training, Mac for coding
-**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · next: Phase 2
+**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ (training run pending) · next: Phase 3
+**Task tracker:** [TASKS.md](TASKS.md)
 
 ---
 
@@ -106,7 +107,7 @@ Mac (VS Code) ──git push──► GitHub ──git clone──► Colab note
 
 ```
 DeepFake/
-├── README.md  PLAN.md  DATASETS.md
+├── README.md  PLAN.md  TASKS.md  DATASETS.md
 ├── requirements.txt  requirements-colab.txt  pyproject.toml
 ├── configs/default.yaml
 ├── src/deepfake/
@@ -115,12 +116,13 @@ DeepFake/
 │   ├── preprocessing/   frames.py · faces.py · audio.py · run.py
 │   ├── datasets/        multimodal.py · visual.py · audio.py
 │   ├── models/          visual.py · audio.py · fusion.py
-│   ├── evaluation/      metrics.py   (+ evaluate.py, robustness_eval.py later)
+│   ├── evaluation/      metrics.py · evaluate.py   (+ robustness_eval.py later)
 │   ├── robustness/      degradations.py  (Phase 5)
 │   ├── explainability/  gradcam.py       (Phase 6)
-│   └── training/        (Phases 2–4)
+│   └── training/        engine.py · tasks.py · train_visual.py   (+ audio, fusion)
 ├── app/app.py           (Phase 7)
-├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess
+├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual
+├── scripts/             make_notebooks.py
 ├── tests/               test_metrics · test_preprocessing · test_models
 └── reports/             figures + results (later)
 ```
@@ -131,7 +133,7 @@ DeepFake/
 
 ### Phase 0: Setup ✅
 - Repo structure, requirements, config, README, `.gitignore`, installable package.
-- Local Python 3.11 venv; 19 passing tests.
+- Local Python 3.11 venv; pytest suite (21 tests).
 - Colab setup notebook.
 
 ### Phase 1: Data pipeline ✅ code / ⏳ data
@@ -141,9 +143,12 @@ DeepFake/
 - PyTorch datasets returning `frames, frame_mask, mel, has_video, has_audio, labels`.
 - **Remaining (you):** submit the FakeAVCeleb and Celeb-DF forms, create a Kaggle token, run notebooks 01 and 02 in Colab.
 
-### Phase 2: Visual branch
-- Training loop (AdamW, BCE, mixed precision, early stopping on val AUC, checkpoint every epoch to Drive, resume).
-- Fine-tune EfficientNet-B0 on face crops (DFDC first, then FakeAVCeleb).
+### Phase 2: Visual branch ✅ code / ⬜ training run
+- Shared training engine (`training/engine.py`): auto device, AMP, checkpoint every epoch, resume, early stopping on val AUC.
+- `training/train_visual.py`: EfficientNet-B0 with a frozen-backbone warm-up, class-balanced BCE and 8 random frames per video in training.
+- `evaluation/evaluate.py`: test metrics, predictions, ROC; also cross-dataset.
+- Notebook `03_train_visual.ipynb`.
+- **Remaining:** run on DFDC (baseline), then FakeAVCeleb (main), then cross-dataset on Celeb-DF.
 - **Deliverable:** checkpoint, AUC/ACC/F1, training curves.
 
 ### Phase 3: Audio branch
