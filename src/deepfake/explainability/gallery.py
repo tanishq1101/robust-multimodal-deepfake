@@ -27,14 +27,9 @@ from deepfake.config import get_path, load_config
 from deepfake.explainability.gradcam import explain, render_explanation
 
 
-def load_model(checkpoint: str | Path, device) -> tuple[torch.nn.Module, dict]:
-    from deepfake.training.tasks import TASKS
-
-    ckpt = torch.load(checkpoint, map_location="cpu", weights_only=False)
-    rc = ckpt["run_config"]
-    model = TASKS[rc["task"]].build_model(rc, False)
-    model.load_state_dict(ckpt["model"])
-    return model.to(device).eval(), rc
+def load_model(checkpoint, device):
+    from deepfake.inference import load_model as _load  # single implementation, avoids an import cycle
+    return _load(checkpoint, device)
 
 
 def pick_examples(scored: pd.DataFrame, per_category: int) -> pd.DataFrame:

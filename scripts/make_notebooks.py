@@ -515,10 +515,52 @@ examples into `reports/figures/`.
 """),
 ])
 
+nb08 = notebook([
+    md("""
+# 08 · Phases 7–8: report + demo
+1. **Build the report:** collects every finished run (metrics, comparisons, robustness, Grad-CAM
+   galleries) into `MyDrive/deepfake_project/report/results.md` plus `figures/`, and zips it for download.
+   Copy the contents into the repo's `reports/` folder and commit.
+2. **Launch the demo:** Gradio app with a public link for the review. The cell keeps running while
+   the app is live; stop it to shut the app down.
+"""),
+    code(SETUP),
+    md("## 1. Build the report"),
+    code("""
+from pathlib import Path
+from IPython.display import Markdown, display
+REPORT = Path(cfg["data_root"]) / "report"
+# optional: write your observations once, they are included in results.md
+# (REPORT / "observations.md").write_text("- Fusion fixes ...")
+!python -m deepfake.report --out {REPORT}
+display(Markdown((REPORT / "results.md").read_text()[:6000]))
+"""),
+    code("""
+import shutil
+from google.colab import files
+zip_path = shutil.make_archive("/content/report", "zip", REPORT)
+files.download(zip_path)   # unzip into the repo's reports/ folder, then commit
+"""),
+    md("## 2. Try one clip from the command line"),
+    code("""
+from deepfake.inference import find_best_checkpoint
+print("best checkpoint:", find_best_checkpoint(cfg))
+# upload a clip first:  from google.colab import files; files.upload()
+CLIP = ""   # e.g. "/content/my_clip.mp4"
+if CLIP:
+    !python -m deepfake.inference "$CLIP" --out /content/clip_result
+"""),
+    md("## 3. Launch the demo (public link)"),
+    code("""
+!python app/app.py --share
+"""),
+], gpu=True)
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, nb in [("00_colab_setup", nb00), ("01_download_datasets", nb01), ("02_preprocess", nb02),
                  ("03_train_visual", nb03), ("04_train_audio", nb04),
                  ("05_train_fusion", nb05), ("06_robustness", nb06),
-                 ("07_explainability", nb07)]:
+                 ("07_explainability", nb07),
+                 ("08_demo_and_report", nb08)]:
     (OUT / f"{name}.ipynb").write_text(json.dumps(nb, indent=1) + "\n")
     print("wrote", name)

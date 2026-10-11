@@ -1,7 +1,7 @@
 # Robust Multimodal Deepfake Analysis: Project Plan
 
 **Type:** College project · **Compute:** Google Colab (GPU) for training, Mac for coding
-**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ · Phase 5 code ✅ · Phase 6 code ✅ (runs pending) · next: Phase 7
+**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ · Phase 5 code ✅ · Phase 6 code ✅ · Phase 7 code ✅ · Phase 8 tooling + drafts ✅ · **remaining: training runs on real data + final PPT**
 **Task tracker:** [TASKS.md](TASKS.md)
 
 ---
@@ -119,12 +119,13 @@ DeepFake/
 │   ├── evaluation/      metrics.py · evaluate.py · compare.py · robustness_eval.py · plots.py
 │   ├── robustness/      degradations.py
 │   ├── explainability/  gradcam.py · gallery.py
-│   └── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py · train_fusion.py
-├── app/app.py           (Phase 7)
-├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion · 06_robustness · 07_explainability
+│   ├── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py · train_fusion.py
+│   ├── inference.py · demo.py · report.py
+├── app/app.py           Gradio launcher
+├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion · 06_robustness · 07_explainability · 08_demo_and_report
 ├── scripts/             make_notebooks.py
-├── tests/               test_metrics · test_preprocessing · test_models
-└── reports/             results.md (template) + figures
+├── tests/               metrics · preprocessing · models · training · fusion · robustness · explainability · demo · report
+└── reports/             results.md (generated) · report.md · presentation_outline.md · figures/
 ```
 
 ---
@@ -180,12 +181,15 @@ DeepFake/
 - `explainability/gallery.py`: the most confident correct and wrong examples per category, saved as PNGs plus an index.
 - Notebook `07_explainability.ipynb`.
 
-### Phase 7: Demo app
-- Gradio app: upload a video → verdict, per-modality scores, heatmaps.
-- Runs in Colab (share link) and locally.
+### Phase 7: Demo app ✅ code / ⬜ with trained model
+- `deepfake/inference.py`: in-memory analysis of a video or audio file with the same preprocessing as training; CLI with JSON and an explanation figure.
+- `deepfake/demo.py` + `app/app.py`: Gradio app with verdict, face and voice scores, and Grad-CAM; `--share` link on Colab.
 
-### Phase 8: Report & presentation
-- Results write-up, figures, final PPT, clean README.
+### Phase 8: Report & presentation ✅ tooling + drafts / ⬜ final numbers + PPT
+- `deepfake/report.py` generates `reports/results.md` and the figures from all finished runs.
+- `reports/report.md`: full report draft; `reports/presentation_outline.md`: slide plan and demo script.
+- Notebook `08_demo_and_report.ipynb`; README polished.
+- Final PPT is built once the format is shared.
 
 ---
 

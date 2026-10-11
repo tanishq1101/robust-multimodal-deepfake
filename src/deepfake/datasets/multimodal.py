@@ -34,6 +34,17 @@ IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], np.float32)
 
 
+def face_to_tensor(face: np.ndarray) -> torch.Tensor:
+    """RGB uint8 face crop [H, W, 3] -> ImageNet-normalised float tensor [3, H, W]."""
+    x = (face.astype(np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
+    return torch.from_numpy(x.transpose(2, 0, 1))
+
+
+def standardise_mel(mel: np.ndarray) -> np.ndarray:
+    """Per-clip standardisation of a log-mel window (zero mean, unit variance)."""
+    return (mel - mel.mean()) / (mel.std() + 1e-5)
+
+
 class MultimodalDataset(Dataset):
     def __init__(self, index_csv: str | Path, split: str | None, cfg: dict, train: bool = False,
                  use_video: bool = True, use_audio: bool = True,
@@ -97,8 +108,7 @@ class MultimodalDataset(Dataset):
         for i, f in enumerate(faces):
             if self.frame_transform:
                 f = self.frame_transform(f)
-            x = (f.astype(np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-            frames[i] = torch.from_numpy(x.transpose(2, 0, 1))
+            frames[i] = face_to_tensor(f)
             mask[i] = True
         return frames, mask, len(faces) > 0
 
@@ -129,8 +139,7 @@ class MultimodalDataset(Dataset):
         mel = crop_or_pad(mel, self.mel_frames, random=self.train, rng=self._rng())
         if self.mel_transform:
             mel = self.mel_transform(mel)
-        mel = (mel - mel.mean()) / (mel.std() + 1e-5)
-        return torch.from_numpy(mel)[None], True
+        return torch.from_numpy(standardise_mel(mel))[None], True
 
     def __getitem__(self, i: int) -> dict:
         r = self.df.iloc[i]

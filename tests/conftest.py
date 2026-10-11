@@ -86,3 +86,16 @@ def branches(tiny_index, tmp_path_factory):
         a = train_audio.main(["--index", str(tiny_index), "--run-name", "a", "--epochs", "1",
                               "--freeze-epochs", "0", *COMMON])
     return root, v / "best.pt", a / "best.pt"
+
+
+@pytest.fixture(scope="session")
+def late_fusion_ckpt(branches, tiny_index):
+    """Late-fusion checkpoint built from the branch fixtures (no training needed)."""
+    from deepfake.training import train_fusion
+
+    root, v, a = branches
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("DEEPFAKE_DATA_ROOT", str(root))
+        run = train_fusion.main(["--index", str(tiny_index), "--run-name", "late_fixture", "--fusion", "late",
+                                 "--visual-ckpt", str(v), "--audio-ckpt", str(a), *COMMON])
+    return run / "best.pt"
