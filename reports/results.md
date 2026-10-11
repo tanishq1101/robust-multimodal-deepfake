@@ -65,7 +65,32 @@ Accuracy per category:
 | FakeVideo-RealAudio | | | | |
 | FakeVideo-FakeAudio | | | | |
 
-## Phase 5: Robustness (todo)
+## Phase 5: Robustness (`outputs/robustness_fakeavceleb_*/robustness.md`)
+
+AUC, overall label, `--limit 300` test clips per condition.
+
+| Condition | visual_only | audio_only | late | intermediate | intermediate_robust |
+|---|---|---|---|---|---|
+| clean | | | | | |
+| jpeg@20 | | | | | |
+| h264@40 | | | | | |
+| gaussian_blur@3 | | | | | |
+| gaussian_noise@30 | | | | | |
+| downscale@4 | | | | | |
+| audio_noise@5 dB | | | | | |
+| mp3@16k | | | | | |
+| video_only (no audio) | – | – | | | |
+| audio_only (no video) | – | – | | | |
+| **mean AUC drop** | | | | | |
+
+Figure: `reports/figures/robustness.png`
+
+Cross-dataset (visual branch, trained on FakeAVCeleb → tested on Celeb-DF):
+
+| Model | AUC | EER |
+|---|---|---|
+| visual (standard) | | |
+| visual (robust) | | |
 
 ## Phase 6: Explainability (todo)
 

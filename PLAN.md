@@ -1,7 +1,7 @@
 # Robust Multimodal Deepfake Analysis: Project Plan
 
 **Type:** College project · **Compute:** Google Colab (GPU) for training, Mac for coding
-**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ (training runs pending) · next: Phase 5
+**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ · Phase 5 code ✅ (runs pending) · next: Phase 6
 **Task tracker:** [TASKS.md](TASKS.md)
 
 ---
@@ -116,12 +116,12 @@ DeepFake/
 │   ├── preprocessing/   frames.py · faces.py · audio.py · run.py
 │   ├── datasets/        multimodal.py · visual.py · audio.py
 │   ├── models/          visual.py · audio.py · fusion.py
-│   ├── evaluation/      metrics.py · evaluate.py · compare.py · plots.py   (+ robustness_eval.py later)
-│   ├── robustness/      degradations.py  (Phase 5)
+│   ├── evaluation/      metrics.py · evaluate.py · compare.py · robustness_eval.py · plots.py
+│   ├── robustness/      degradations.py
 │   ├── explainability/  gradcam.py       (Phase 6)
 │   └── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py · train_fusion.py
 ├── app/app.py           (Phase 7)
-├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion
+├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion · 06_robustness
 ├── scripts/             make_notebooks.py
 ├── tests/               test_metrics · test_preprocessing · test_models
 └── reports/             results.md (template) + figures
@@ -167,11 +167,12 @@ DeepFake/
 - Notebook `05_train_fusion.ipynb`.
 - **Deliverable:** comparison table. This is the core result.
 
-### Phase 5: Robustness
-- Implement the degradations in `robustness/degradations.py`.
-- Stress-test the baseline models, retrain with augmentation, then stress-test again.
-- Run the missing-modality test.
-- Run a cross-dataset test on Celeb-DF.
+### Phase 5: Robustness ✅ code / ⬜ runs
+- `robustness/degradations.py`: JPEG, H.264, blur, noise, downscale (video); noise, MP3 (audio); 3 severities each.
+- Preprocessing also stores 16 kHz FLAC waveforms, so audio degradations act on real audio.
+- `evaluation/robustness_eval.py`: AUC vs. severity per degradation, plus face-only / voice-only tests.
+- `--robust-augment` for all training scripts; notebook `06_robustness.ipynb` compares standard vs. robust.
+- Cross-dataset test on Celeb-DF.
 - **Deliverable:** robustness tables and "metric vs. severity" plots.
 
 ### Phase 6: Explainability
@@ -205,7 +206,7 @@ DeepFake/
 |---|---|
 | Dataset approval delayed | DFDC + ASVspoof need no approval; the pipeline is built on them first |
 | Colab disconnects | Resumable downloads, preprocessing skips finished files, checkpoints every epoch |
-| Drive space (15 GB free) | Raw data on VM disk; faces stored as JPEG-in-npz; balanced subsets (`--per-class`) |
+| Drive space (15 GB free) | Raw data on VM disk; faces stored as JPEG-in-npz; 16-bit FLAC audio; balanced subsets (`--per-class`) |
 | FakeAVCeleb imbalance (500 real vs 19,500 fake) | Balanced subsets per category; AUC as the main metric |
 | Overfitting | Pretrained backbones, augmentation, identity-wise splits, early stopping |
 | Face detection failures | Previous box reused, centre-crop fallback, detection rate logged |

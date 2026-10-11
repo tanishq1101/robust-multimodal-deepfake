@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 
@@ -13,6 +14,10 @@ CATEGORIES = [
     ("RealVideo-FakeAudio", 0, 1),
     ("FakeVideo-RealAudio", 1, 0),
 ]
+
+
+DEVICE = os.environ.get("DEEPFAKE_TEST_DEVICE", "cpu")
+COMMON = ["--batch-size", "2", "--no-pretrained", "--device", DEVICE, "--workers", "0", "--patience", "10"]
 
 
 @pytest.fixture(scope="session")
@@ -66,3 +71,18 @@ def tiny_index(tmp_path_factory):
     idx["split"] = ["train" if k < 4 else "val" if k < 8 else "test" for k in n]
     idx.to_csv(out / "index.csv", index=False)
     return out / "index.csv"
+
+
+@pytest.fixture(scope="session")
+def branches(tiny_index, tmp_path_factory):
+    """Data root with one-epoch visual and audio branch checkpoints: (root, visual.pt, audio.pt)."""
+    from deepfake.training import train_audio, train_visual
+
+    root = tmp_path_factory.mktemp("branch_root")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("DEEPFAKE_DATA_ROOT", str(root))
+        v = train_visual.main(["--index", str(tiny_index), "--run-name", "v", "--epochs", "1",
+                               "--frames-per-video", "2", "--freeze-epochs", "0", *COMMON])
+        a = train_audio.main(["--index", str(tiny_index), "--run-name", "a", "--epochs", "1",
+                              "--freeze-epochs", "0", *COMMON])
+    return root, v / "best.pt", a / "best.pt"

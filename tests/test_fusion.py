@@ -1,32 +1,16 @@
 """Phase 4: fusion models, late-fusion calibration and the comparison table."""
 
 import json
-import os
 
 import pandas as pd
-import pytest
 import torch
 
 from deepfake.evaluation import compare
 from deepfake.models import AudioModel, MultimodalModel, VisualModel
 from deepfake.models.fusion import LATE_RULES, late_combine
-from deepfake.training import train_audio, train_fusion, train_visual
+from deepfake.training import train_fusion
 
-DEVICE = os.environ.get("DEEPFAKE_TEST_DEVICE", "cpu")
-COMMON = ["--batch-size", "2", "--no-pretrained", "--device", DEVICE, "--workers", "0", "--patience", "10"]
-
-
-@pytest.fixture(scope="module")
-def branches(tiny_index, tmp_path_factory):
-    """Data root with one-epoch visual and audio branch checkpoints."""
-    root = tmp_path_factory.mktemp("fusion_root")
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("DEEPFAKE_DATA_ROOT", str(root))
-        v = train_visual.main(["--index", str(tiny_index), "--run-name", "v", "--epochs", "1",
-                               "--frames-per-video", "2", "--freeze-epochs", "0", *COMMON])
-        a = train_audio.main(["--index", str(tiny_index), "--run-name", "a", "--epochs", "1",
-                              "--freeze-epochs", "0", *COMMON])
-    return root, v / "best.pt", a / "best.pt"
+from conftest import COMMON, DEVICE
 
 
 def test_late_combine_rules():

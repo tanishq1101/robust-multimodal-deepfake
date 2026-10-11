@@ -384,9 +384,75 @@ display(Image(str(OUT / "comparison.png")))
 """),
 ], gpu=True)
 
+nb06 = notebook([
+    md("""
+# 06 · Phase 5: robustness
+1. **Stress test** the Phase 2–4 models: clean test set vs. JPEG, H.264, blur, noise and downscaling
+   (video), noise and MP3 (audio), each at 3 severities, plus face-only / voice-only for fusion.
+2. **Robust training**: fine-tune with random degradations (`--robust-augment`).
+3. **Stress test again**: standard vs. robust models.
+
+**Needs:** checkpoints from notebooks 03–05 and `processed/<dataset>/wav/`. Data processed before
+Phase 5 has no `wav/` folder: re-run notebook 01 for the dataset, then
+`python -m deepfake.preprocessing.run <dataset>` (it only adds the missing files).
+H.264 and MP3 run on the CPU, so the stress test uses a random subset (`LIMIT`).
+"""),
+    code(SETUP),
+    code("""
+import os, pandas as pd
+from pathlib import Path
+from IPython.display import Image, Markdown, display
+DATASET = "fakeavceleb"
+LIMIT = 300                      # test clips per condition; None = whole test split
+CKPT = Path(cfg["paths"]["checkpoints"])
+OUTS = Path(cfg["paths"]["outputs"])
+idx = pd.read_csv(Path(cfg["paths"]["processed"]) / DATASET / "index.csv", keep_default_na=False)
+print("clips with wav/:", (idx.get("wav_path", pd.Series([""])) != "").sum(), "/", len(idx))
+
+def models_arg(names):
+    return " ".join(f"--model {n}={CKPT / r / 'best.pt'}" for n, r in names.items() if (CKPT / r / "best.pt").exists())
+
+def show(out):
+    display(Markdown((out / "robustness.md").read_text()))
+    display(Image(str(out / "robustness.png")))
+"""),
+    md("## 1. Stress test of the standard models (overall label: fake if face or voice is fake)"),
+    code("""
+base = {"visual_only": f"visual_{DATASET}", "audio_only": f"audio_{DATASET}",
+        "late": f"fusion_late_{DATASET}", "intermediate": f"fusion_intermediate_{DATASET}"}
+lim = f"--limit {LIMIT}" if LIMIT else ""
+OUT1 = OUTS / f"robustness_{DATASET}_standard"
+!python -m deepfake.evaluation.robustness_eval --dataset $DATASET --label overall {models_arg(base)} {lim} --out {OUT1} --workers 2
+show(OUT1)
+"""),
+    md("## 2. Robust fine-tuning (random degradations with probability 0.5)"),
+    code("""
+COMMON = f"--dataset {DATASET} --robust-augment --lr 3e-5 --freeze-epochs 0 --epochs 8 --workers 2"
+!python -m deepfake.training.train_visual {COMMON} --run-name visual_{DATASET}_robust --init-from {CKPT}/visual_{DATASET}/best.pt
+!python -m deepfake.training.train_audio {COMMON} --batch-size 32 --run-name audio_{DATASET}_robust --init-from {CKPT}/audio_{DATASET}/best.pt
+"""),
+    code("""
+!python -m deepfake.training.train_fusion --fusion intermediate --robust-augment --dataset $DATASET --epochs 8 --workers 2 --run-name fusion_intermediate_{DATASET}_robust --visual-ckpt {CKPT}/visual_{DATASET}_robust/best.pt --audio-ckpt {CKPT}/audio_{DATASET}_robust/best.pt
+"""),
+    md("## 3. Standard vs. robust"),
+    code("""
+pairs = {"intermediate": f"fusion_intermediate_{DATASET}", "intermediate_robust": f"fusion_intermediate_{DATASET}_robust",
+         "visual_only": f"visual_{DATASET}", "visual_robust": f"visual_{DATASET}_robust",
+         "audio_only": f"audio_{DATASET}", "audio_robust": f"audio_{DATASET}_robust"}
+OUT2 = OUTS / f"robustness_{DATASET}_robust_vs_standard"
+!python -m deepfake.evaluation.robustness_eval --dataset $DATASET --label overall {models_arg(pairs)} {lim} --out {OUT2} --workers 2
+show(OUT2)
+"""),
+    md("""
+**How to read it:** the *mean AUC drop* table summarises robustness. Robust models should lose
+less AUC under degradations at a small cost (if any) on clean data. Copy `robustness.md` and
+`robustness.png` into `reports/`.
+"""),
+], gpu=True)
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, nb in [("00_colab_setup", nb00), ("01_download_datasets", nb01), ("02_preprocess", nb02),
                  ("03_train_visual", nb03), ("04_train_audio", nb04),
-                 ("05_train_fusion", nb05)]:
+                 ("05_train_fusion", nb05), ("06_robustness", nb06)]:
     (OUT / f"{name}.ipynb").write_text(json.dumps(nb, indent=1) + "\n")
     print("wrote", name)

@@ -17,7 +17,7 @@ Last updated: 2026-10-11
 | R1 | Run notebooks 00 → 01 → 02 in Colab on DFDC + ASVspoof | You | ⬜ |
 | R2 | Run notebook 03: first visual baseline on DFDC | You | ⬜ |
 | R3 | Run notebook 04 step 1: audio pre-training on ASVspoof | You | ⬜ (no approval needed) |
-| P5 | Phase 5: robustness (degradations + stress tests) | Code | ⬜ next |
+| P6 | Phase 6: explainability (Grad-CAM) | Code | ⬜ next |
 
 ---
 
@@ -93,15 +93,21 @@ Last updated: 2026-10-11
 | 4.8 | Record comparison in `reports/results.md` | copy `comparison.md` | ⏳ needs 4.7 |
 | 4.9 | (Optional) attention / gated fusion variant | extra comparison row | ⬜ |
 
-## Phase 5: Robustness ⬜
+## Phase 5: Robustness 🔄 (code ✅, runs pending)
 
 | # | Task | Spec | Status |
 |---|---|---|---|
-| 5.1 | Implement degradations | `robustness/degradations.py` (signatures + severities already defined) | ⬜ |
-| 5.2 | Stress-test suite | `evaluation/robustness_eval.py`: metric vs severity for each degradation | ⬜ |
-| 5.3 | Robust training | add degradations to the training augmentation, retrain, compare before/after | ⬜ |
-| 5.4 | Missing-modality test | evaluate with video only / audio only | ⬜ |
-| 5.5 | Plots + tables | `reports/figures/robustness_*.png` | ⬜ |
+| 5.1 | Degradations | `robustness/degradations.py`. Video (on the face clip): JPEG q 90/50/20, H.264 CRF 23/30/40 (libx264 round trip), blur σ 1/2/3, Gaussian noise std 5/15/30, downscale ×2/3/4. Audio (on the waveform): white noise SNR 20/10/5 dB, MP3 64k/32k/16k (libmp3lame). `Degradation(name, level)` and `RandomDegradation` are picklable | ✅ |
+| 5.2 | Waveform storage | preprocessing also writes `wav/<id>.flac` (16 kHz, 16-bit, ≤10 s); re-running on old data only adds the missing files; `wav_path` column in the index | ✅ |
+| 5.3 | Dataset hooks | `clip_transform` (whole face clip) and `wav_transform` (waveform → degraded → log-mel recomputed) in `MultimodalDataset` | ✅ |
+| 5.4 | Stress-test suite | `evaluation/robustness_eval.py`: clean + each applicable degradation × severity per model; `--label native/overall`; `--limit` subset; same random noise for every model; outputs `robustness.csv/.md/.png` with AUC drop vs clean | ✅ |
+| 5.5 | Missing-modality test | `video_only` / `audio_only` conditions for fusion models | ✅ |
+| 5.6 | Robust training | `--robust-augment` (+ `--robust-p`, default 0.5) for all three training scripts | ✅ |
+| 5.7 | Notebook + tests | `06_robustness.ipynb` (stress test → robust fine-tuning → standard vs robust); 13 new tests (severity monotonicity, SNR accuracy, MP3 round trip, hooks, robust training, suite) | ✅ |
+| 5.8 | Run stress test on standard models | `--label overall`, `--limit 300` | ⏳ needs 4.7 |
+| 5.9 | Robust fine-tuning + stress test again | target: lower mean AUC drop with ≤ 0.01 clean-AUC loss | ⏳ needs 5.8 |
+| 5.10 | Cross-dataset test on Celeb-DF | `evaluation.evaluate --dataset celebdf` (standard vs robust visual model) | ⏳ needs 1.11 |
+| 5.11 | Figures into `reports/figures/` + numbers into `reports/results.md` | | ⏳ |
 
 ## Phase 6: Explainability ⬜
 
@@ -143,3 +149,5 @@ Last updated: 2026-10-11
 | 2026-10-11 | Audio: ASVspoof pre-training → FakeAVCeleb fine-tuning | ASVspoof is much larger and speech-focused; ablation planned to verify the benefit |
 | 2026-10-11 | Late fusion offers max / noisy-OR, not only a weighted average | The overall label is an OR of face-fake and voice-fake; averaging dilutes a single confident fake branch |
 | 2026-10-11 | Comparison scores all models against the overall label on the same samples | Fair table: single-branch models are penalised for the fake type they cannot see |
+| 2026-10-11 | Video degradations applied to stored face crops, not the full original frames | No raw video needed after preprocessing and much cheaper; documented as an approximation of platform re-compression |
+| 2026-10-11 | Store a 16 kHz FLAC waveform per clip | MP3 / additive noise must act on the waveform, not the spectrogram; ~32 KB/s, acceptable on Drive |

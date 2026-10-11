@@ -44,6 +44,9 @@ def build_parser(task_name: str, cfg: dict, doc: str) -> argparse.ArgumentParser
     p.add_argument("--device", help="cuda | mps | cpu (default: auto)")
     p.add_argument("--no-pretrained", action="store_true", help="random init (tests only)")
     p.add_argument("--no-augment", action="store_true")
+    p.add_argument("--robust-augment", action="store_true",
+                   help="Phase 5: randomly apply compression/blur/noise (video) and MP3/noise (audio)")
+    p.add_argument("--robust-p", type=float, default=0.5, help="probability per sample for --robust-augment")
     p.add_argument("--no-resume", action="store_true", help="ignore an existing last.pt")
     p.add_argument("--seed", type=int, default=cfg["seed"])
     return p
@@ -67,7 +70,8 @@ def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict 
     run_config = {
         "task": task_name, "index": str(index), "backbone": getattr(args, "backbone", None),
         "dropout": args.dropout,
-        "augment": not args.no_augment, "init_from": args.init_from, "epochs": args.epochs,
+        "augment": not args.no_augment, "robust_augment": args.robust_augment, "robust_p": args.robust_p,
+        "init_from": args.init_from, "epochs": args.epochs,
         "batch_size": args.batch_size, "lr": args.lr, "weight_decay": args.weight_decay,
         "freeze_epochs": args.freeze_epochs, "patience": args.patience, "seed": args.seed,
         **(extra_config or {}),

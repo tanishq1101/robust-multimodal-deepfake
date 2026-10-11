@@ -1,4 +1,5 @@
-"""Batch preprocessing: video -> face crops (.npz) + log-mel spectrogram (.npy).
+"""Batch preprocessing: video -> face crops (.npz) + log-mel spectrogram (.npy) +
+16 kHz waveform (.flac, used for audio degradations in Phase 5).
 
 Re-running skips samples that are already processed, so it is safe after a Colab disconnect.
 
@@ -23,6 +24,8 @@ import pandas as pd
 from tqdm import tqdm
 
 from deepfake.config import get_path, load_config
+import soundfile as sf
+
 from deepfake.preprocessing.audio import load_audio, log_mel
 from deepfake.preprocessing.faces import FaceDetector, extract_faces, save_faces
 from deepfake.preprocessing.frames import sample_frames
@@ -37,9 +40,9 @@ def _init_worker(cfg: dict, use_detector: bool) -> None:
     _detector = FaceDetector(cfg["video"]["detector_score"]) if use_detector else None
 
 
-def process_one(job: tuple[str, str, str, str, str]) -> dict:
-    """job = (sample_id, media_path, modality, faces_out, mel_out)  — all absolute paths."""
-    sample_id, media, modality, faces_out, mel_out = job
+def process_one(job: tuple[str, str, str, str, str, str]) -> dict:
+    """job = (sample_id, media_path, modality, faces_out, mel_out, wav_out) — absolute paths."""
+    sample_id, media, modality, faces_out, mel_out, wav_out = job
     v, a = _cfg["video"], _cfg["audio"]
     info = {"sample_id": sample_id, "n_frames": 0, "n_detected": 0, "audio_seconds": 0.0, "error": ""}
     try:
@@ -53,10 +56,17 @@ def process_one(job: tuple[str, str, str, str, str]) -> dict:
                 save_faces(faces_out, faces, detected, v["jpeg_quality"])
                 info["n_frames"], info["n_detected"] = len(faces), int(detected.sum())
         if modality in ("av", "audio"):
+            wav = None
+            if not Path(wav_out).exists():
+                wav = load_audio(media, a["sample_rate"], a["max_seconds"])
+                if len(wav):
+                    Path(wav_out).parent.mkdir(parents=True, exist_ok=True)
+                    sf.write(wav_out, np.clip(wav, -1, 1), a["sample_rate"], format="FLAC", subtype="PCM_16")
             if Path(mel_out).exists():
                 mel = np.load(mel_out)
             else:
-                wav = load_audio(media, a["sample_rate"], a["max_seconds"])
+                if wav is None:
+                    wav = load_audio(media, a["sample_rate"], a["max_seconds"])
                 mel = log_mel(wav, a["sample_rate"], a["n_fft"], a["win_length"], a["hop_length"], a["n_mels"])
                 if len(wav) == 0:
                     mel = mel[:, :0]  # no audio track
@@ -78,13 +88,15 @@ def balanced_subset(df: pd.DataFrame, per_class: int, seed: int) -> pd.DataFrame
 
 def run(df: pd.DataFrame, media_root: Path, out_root: Path, cfg: dict, workers: int,
         use_detector: bool = True) -> pd.DataFrame:
-    """Process every row of a manifest. faces_path / mel_path in the returned index are relative
-    to out_root (where index.csv is saved), so the index works from both Mac and Colab."""
+    """Process every row of a manifest. faces_path / mel_path / wav_path in the returned index are
+    relative to out_root (where index.csv is saved), so the index works from both Mac and Colab.
+    Re-running on an older output folder only adds what is missing (e.g. the wav/ files)."""
     jobs = []
     for r in df.itertuples():
         stem = str(r.sample_id)
         jobs.append((stem, str(media_root / r.path), r.modality,
-                     str(out_root / "faces" / f"{stem}.npz"), str(out_root / "mel" / f"{stem}.npy")))
+                     str(out_root / "faces" / f"{stem}.npz"), str(out_root / "mel" / f"{stem}.npy"),
+                     str(out_root / "wav" / f"{stem}.flac")))
     if workers > 1:
         with ProcessPoolExecutor(workers, initializer=_init_worker, initargs=(cfg, use_detector)) as ex:
             results = list(tqdm(ex.map(process_one, jobs, chunksize=4), total=len(jobs)))
@@ -97,6 +109,8 @@ def run(df: pd.DataFrame, media_root: Path, out_root: Path, cfg: dict, workers: 
     has_a = out.modality.isin(["av", "audio"]) & (out.audio_seconds > 0)
     out["faces_path"] = np.where(has_v, [f"faces/{s}.npz" for s in out.sample_id], "")
     out["mel_path"] = np.where(has_a, [f"mel/{s}.npy" for s in out.sample_id], "")
+    out["wav_path"] = [f"wav/{s}.flac" if (a and (out_root / "wav" / f"{s}.flac").exists()) else ""
+                       for s, a in zip(out.sample_id, has_a)]
     return out
 
 

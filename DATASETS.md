@@ -57,7 +57,7 @@ Official splits are kept: train → train, dev → val, eval → test. The eval 
 | What | Location | Why |
 |---|---|---|
 | Raw datasets | Colab VM disk `/content/raw/` | Too big for free 15 GB Drive; wiped when the session ends |
-| Manifests, processed faces/spectrograms, checkpoints | `MyDrive/deepfake_project/` | Small, persistent |
+| Manifests, processed faces / spectrograms / 16 kHz FLAC audio, checkpoints | `MyDrive/deepfake_project/` | Small, persistent |
 
 So run notebook **01 then 02 in the same Colab session**. After preprocessing, the raw data is no longer needed.
 Override the locations with the `DEEPFAKE_RAW_ROOT` / `DEEPFAKE_DATA_ROOT` environment variables.

@@ -17,6 +17,7 @@ from torch import nn
 
 from deepfake.datasets import AudioDataset, MultimodalDataset, VisualDataset
 from deepfake.models import AudioModel, MultimodalModel, VisualModel
+from deepfake.robustness.degradations import RandomDegradation
 
 
 # --------------------------------------------------------------------------- augmentation
@@ -60,6 +61,14 @@ class SpecAugment:
         return mel
 
 
+def robust_transforms(train: bool, run_config: dict) -> dict:
+    """Phase 5 robust training: random compression / blur / noise / MP3 degradations."""
+    if not (train and run_config.get("robust_augment")):
+        return {"clip_transform": None, "wav_transform": None}
+    p = run_config.get("robust_p", 0.5)
+    return {"clip_transform": RandomDegradation("video", p), "wav_transform": RandomDegradation("audio", p)}
+
+
 # --------------------------------------------------------------------------- visual
 
 def visual_forward(model: VisualModel, batch: dict) -> torch.Tensor:
@@ -74,6 +83,7 @@ def build_visual_dataset(index_csv, split: str, cfg: dict, train: bool, run_conf
     ds = VisualDataset(index_csv, split, cfg, train=train,
                        frame_transform=FrameAugment() if train and run_config.get("augment", True) else None,
                        frames_per_item=run_config.get("frames_per_video"))
+    ds.clip_transform = robust_transforms(train, run_config)["clip_transform"]
     # The visual branch learns "is the FACE fake": e.g. FakeAVCeleb RealVideo-FakeAudio is
     # a real face (video_label 0). Rows without a video label are dropped.
     ds.df = ds.df[ds.df["video_label"].astype(int) >= 0].reset_index(drop=True)
@@ -93,6 +103,7 @@ def build_audio_model(run_config: dict, pretrained: bool) -> nn.Module:
 def build_audio_dataset(index_csv, split: str, cfg: dict, train: bool, run_config: dict):
     ds = AudioDataset(index_csv, split, cfg, train=train,
                       mel_transform=SpecAugment() if train and run_config.get("augment", True) else None)
+    ds.wav_transform = robust_transforms(train, run_config)["wav_transform"]
     # The audio branch learns "is the VOICE fake": FakeAVCeleb FakeVideo-RealAudio has
     # audio_label 0. DFDC has no audio labels (-1) and is dropped here.
     ds.df = ds.df[ds.df["audio_label"].astype(int) >= 0].reset_index(drop=True)
@@ -125,7 +136,8 @@ def build_fusion_dataset(index_csv, split: str, cfg: dict, train: bool, run_conf
     ds = MultimodalDataset(index_csv, split, cfg, train=train,
                            frame_transform=FrameAugment() if aug else None,
                            mel_transform=SpecAugment() if aug else None,
-                           frames_per_item=run_config.get("frames_per_video"))
+                           frames_per_item=run_config.get("frames_per_video"),
+                           **robust_transforms(train, run_config))
     ds.df = ds.df[ds.df["label"].astype(int) >= 0].reset_index(drop=True)
     return ds
 
