@@ -1,0 +1,35 @@
+{
+  "task": "audio",
+  "index": "/content/drive/MyDrive/deepfake_project/processed/asvspoof/index.csv",
+  "backbone": "resnet18",
+  "dropout": 0.3,
+  "augment": true,
+  "robust_augment": false,
+  "robust_p": 0.5,
+  "init_from": null,
+  "epochs": 15,
+  "batch_size": 32,
+  "lr": 0.0001,
+  "weight_decay": 0.0001,
+  "freeze_epochs": 1,
+  "patience": 3,
+  "seed": 42,
+  "preprocessing": {
+    "video": {
+      "num_frames": 16,
+      "face_size": 224,
+      "face_margin": 1.3,
+      "detector_score": 0.7,
+      "jpeg_quality": 95
+    },
+    "audio": {
+      "sample_rate": 16000,
+      "max_seconds": 10.0,
+      "window_seconds": 4.0,
+      "n_fft": 512,
+      "win_length": 400,
+      "hop_length": 160,
+      "n_mels": 128
+    }
+  }
+}

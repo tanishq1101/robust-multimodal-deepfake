@@ -1,0 +1,31 @@
+{
+  "n": 5000,
+  "accuracy": 0.9124,
+  "precision": 0.9909523809523809,
+  "recall": 0.8324,
+  "f1": 0.9047826086956522,
+  "confusion_matrix": [
+    [
+      2481,
+      19
+    ],
+    [
+      419,
+      2081
+    ]
+  ],
+  "auc": 0.9770709599999999,
+  "eer": 0.06200000000000003,
+  "eer_threshold": 0.010209054686129093,
+  "split": "test",
+  "index": "/content/drive/MyDrive/deepfake_project/processed/asvspoof/index.csv",
+  "checkpoint": "/content/drive/MyDrive/deepfake_project/checkpoints/audio_asvspoof_3a53cf51/best.pt",
+  "label_key": "audio_label",
+  "best_epoch": 3,
+  "at_eer_threshold": {
+    "accuracy": 0.938,
+    "precision": 0.938,
+    "recall": 0.938,
+    "f1": 0.938
+  }
+}

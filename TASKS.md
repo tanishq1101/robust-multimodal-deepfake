@@ -137,7 +137,9 @@ All code for Phases 0–8 is implemented and tested. What remains is running it 
 | 7.2 | CLI | `python -m deepfake.inference clip.mp4 [--checkpoint] [--out]` → JSON + `explanation.png`; picks the best available checkpoint (robust intermediate fusion > intermediate > late > visual > audio) | ✅ |
 | 7.3 | Gradio UI | `deepfake/demo.py` + `app/app.py`: upload, heatmap target, verdict label, score table, face Grad-CAM gallery, spectrogram Grad-CAM; `--share` for Colab; disclaimer | ✅ |
 | 7.4 | Tests + live check | 7 tests (fusion/no-face/no-audio/audio-file inference, CLI, checkpoint picker, UI handler); app launched locally and queried end-to-end through the Gradio client | ✅ |
-| 7.5 | Demo with the trained model + screen recording for the review | notebook 08 | ⏳ needs R5 |
+| 7.5 | Demo with the trained model + screen recording for the review | notebook 08 | 🔄 demo runs with the published ASVspoof voice model (2026-10-11); fusion model + screen recording need R5 |
+| 7.6 | UI/UX redesign | Tabs: Analyse (video / audio upload / microphone, verdict card with probability gauge, per-branch evidence, input checks, adjustable threshold, Grad-CAM), Model & training (`deepfake/model_card.py`: data splits, settings, test metrics, confusion matrix, per-category table, curves, ROC, history), Code (training command + model/training source), About. Responsive; tested in desktop and mobile widths | ✅ |
+| 7.7 | Publish trained models | `models/<run>/` in git (config, data, history, metrics, per-category, predictions, figures, model card); weights as GitHub Release assets; `scripts/download_model.py` verifies SHA-256; app finds `models/` automatically | ✅ |
 
 ## Phase 8: Report & presentation 🔄 (tooling + drafts ✅, final numbers pending)
 

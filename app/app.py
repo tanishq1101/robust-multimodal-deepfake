@@ -1,9 +1,11 @@
 """Gradio demo launcher (Phase 7).
 
-Upload a video -> overall real/fake verdict, face and voice scores, Grad-CAM heatmaps.
+Upload a video or audio (or record your voice) -> real/fake verdict, branch scores, Grad-CAM
+evidence; plus the loaded model's training data, metrics and code.
 
 Usage:
-  python app/app.py                                   # best checkpoint in <data_root>/checkpoints
+  python scripts/download_model.py                    # once: fetch the published trained weights
+  python app/app.py                                   # best checkpoint (data checkpoints, then models/)
   python app/app.py --checkpoint path/to/best.pt
   python app/app.py --share                           # public link (use this on Colab)
 """
@@ -11,7 +13,7 @@ Usage:
 import argparse
 import sys
 
-from deepfake.demo import create_demo
+from deepfake.demo import CSS, THEME, create_demo
 from deepfake.inference import DeepfakeDetector, find_best_checkpoint
 
 
@@ -26,10 +28,11 @@ def main(argv=None):
 
     ckpt = args.checkpoint or find_best_checkpoint()
     if not ckpt:
-        sys.exit("No checkpoint found. Train a model first (notebooks 03-05) or pass --checkpoint.")
+        sys.exit("No checkpoint found. Download the published model with `python scripts/download_model.py`, "
+                 "train one (notebooks 03-05), or pass --checkpoint.")
     print(f"Loading {ckpt}")
     demo = create_demo(DeepfakeDetector(ckpt, args.device, args.threshold))
-    demo.launch(share=args.share, server_port=args.port)
+    demo.launch(share=args.share, server_port=args.port, theme=THEME, css=CSS)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ Outputs in <data_root>/checkpoints/<run-name>/:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import torch
@@ -85,6 +86,12 @@ def validate_labels(ds, key: str, split: str) -> None:
         raise ValueError(f"{split} must contain both real and fake {key} labels")
 
 
+def split_counts(ds, key: str) -> dict:
+    """Clip / fake / real counts of one split, saved with the run for the report and the demo."""
+    labels = ds.df[key].to_numpy().astype(int)
+    return {"clips": len(labels), "fake": int((labels == 1).sum()), "real": int((labels == 0).sum())}
+
+
 def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict | None = None,
         init_fn=None) -> Path:
     """Train one task. init_fn(model) can load pre-trained weights (skipped when resuming)."""
@@ -114,6 +121,11 @@ def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict 
     validate_labels(train_ds, task.label_key, "train")
     validate_labels(val_ds, task.label_key, "val")
     print(f"[{task_name}] train: {len(train_ds)} ({int((labels == 1).sum())} fake) | val: {len(val_ds)}")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "data.json").write_text(json.dumps(
+        {"dataset": args.dataset, "index": str(index), "label": task.label_key,
+         "splits": {name: split_counts(ds, task.label_key) for name, ds in (("train", train_ds), ("val", val_ds))}},
+        indent=2))
 
     device = get_device(args.device)
     print(f"device: {device}")

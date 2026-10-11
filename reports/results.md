@@ -55,7 +55,7 @@ Per category:
 | bonafide   | 2500 |          0.0000 |       0.0118 |     0.9924 |                    |                      |
 
 ![](figures/audio_asvspoof_3a53cf51_curves.png)
-_ROC curve: `MyDrive/deepfake_project/report/figures/audio_asvspoof_3a53cf51_roc.png` (not copied to the repository)._
+![](figures/audio_asvspoof_3a53cf51_roc.png)
 
 ## Phase 4: Fusion models
 

@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from deepfake.config import get_path, load_config  # noqa: E402
+from deepfake.config import REPO_ROOT, get_path, load_config  # noqa: E402
 from deepfake.datasets.multimodal import face_to_tensor, standardise_mel  # noqa: E402
 from deepfake.explainability.gradcam import denormalise, explain, overlay, render_explanation  # noqa: E402
 from deepfake.preprocessing.audio import crop_or_pad, load_audio, log_mel  # noqa: E402
@@ -50,13 +50,16 @@ def load_model(checkpoint: str | Path, device) -> tuple[torch.nn.Module, dict]:
     return model.to(device).eval(), rc
 
 
-def find_best_checkpoint(cfg: dict | None = None) -> Path | None:
-    cfg = cfg or load_config()
-    root = get_path(cfg, "checkpoints")
+def find_best_checkpoint(cfg: dict | None = None, roots: list[Path] | None = None) -> Path | None:
+    """Best available checkpoint: <data_root>/checkpoints first, then the published models/ folder."""
+    if roots is None:
+        cfg = cfg or load_config()
+        roots = [get_path(cfg, "checkpoints"), REPO_ROOT / "models"]
     for pattern in CHECKPOINT_PREFERENCE:
-        hits = sorted(root.glob(f"{pattern}/best.pt"))
-        if hits:
-            return hits[0]
+        for root in roots:
+            hits = sorted(Path(root).glob(f"{pattern}/best.pt"))
+            if hits:
+                return hits[0]
     return None
 
 
@@ -135,7 +138,8 @@ class DeepfakeDetector:
                 "visual": torch.sigmoid(out["visual_logit"]).item() if batch["has_video"].item() else None,
                 "audio": torch.sigmoid(out["audio_logit"]).item() if batch["has_audio"].item() else None}
 
-    def analyse(self, path: str | Path, with_explanation: bool = True, target: str = "predicted") -> dict:
+    def analyse(self, path: str | Path, with_explanation: bool = True, target: str = "predicted",
+                threshold: float | None = None) -> dict:
         """Returns a dict:
           p_fake, verdict ("FAKE"/"REAL"), threshold, task, checkpoint,
           scores        {"overall"?, "visual"?, "audio"?} branch probabilities (None if modality missing)
@@ -145,6 +149,9 @@ class DeepfakeDetector:
           spectrogram   RGB array (spectrogram + Grad-CAM)             [with_explanation]
           figure        RGB array of the full explanation figure        [with_explanation]
         """
+        threshold = self.threshold if threshold is None else threshold
+        if not 0 <= threshold <= 1:
+            raise ValueError("threshold must be between 0 and 1")
         batch, info = self.preprocess(path)
         warnings = []
         if self.task in ("visual", "fusion") and not info["has_face"]:
@@ -160,17 +167,17 @@ class DeepfakeDetector:
         if not usable:
             keys = ["overall", "visual", "audio"] if self.task == "fusion" else [self.task]
             warnings.append("Insufficient evidence: this model cannot judge the file.")
-            return {"p_fake": None, "verdict": "INCONCLUSIVE", "threshold": self.threshold,
+            return {"p_fake": None, "verdict": "INCONCLUSIVE", "threshold": threshold,
                     "task": self.task, "checkpoint": str(self.checkpoint),
                     "scores": dict.fromkeys(keys), "info": info, "warnings": warnings}
         scores = self._scores(batch)
         p = scores.get("overall", scores.get("visual", scores.get("audio")))
-        result = {"p_fake": p, "verdict": "FAKE" if p >= self.threshold else "REAL",
-                  "threshold": self.threshold, "task": self.task, "checkpoint": str(self.checkpoint),
+        result = {"p_fake": p, "verdict": "FAKE" if p >= threshold else "REAL",
+                  "threshold": threshold, "task": self.task, "checkpoint": str(self.checkpoint),
                   "scores": scores, "info": info, "warnings": warnings}
 
         if with_explanation and (info["has_face"] or info["has_audio"]):
-            explained_target = ("fake" if p >= self.threshold else "real") if target == "predicted" else target
+            explained_target = ("fake" if p >= threshold else "real") if target == "predicted" else target
             exp = explain(self.model, self.task, batch, target=explained_target)
             result["explained_class"] = exp["target"]
             if exp["visual_cam"] is not None:

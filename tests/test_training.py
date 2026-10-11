@@ -40,6 +40,8 @@ def test_train_resume_evaluate(tiny_index, tmp_path, monkeypatch):
 
     metrics = json.loads((run_dir / "test" / "metrics.json").read_text())
     assert metrics["n"] == 4 and 0.0 <= metrics["auc"] <= 1.0
+    data = json.loads((run_dir / "data.json").read_text())
+    assert {s: d["clips"] for s, d in data["splits"].items()} == {"train": 4, "val": 4}
     assert len(pd.read_csv(run_dir / "test" / "predictions.csv")) == 4
     before_resume = torch.load(run_dir / "last.pt", weights_only=False)["model"]["head.1.weight"]
 

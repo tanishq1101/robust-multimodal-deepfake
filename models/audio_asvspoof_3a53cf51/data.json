@@ -1,0 +1,10 @@
+{
+  "dataset": "asvspoof",
+  "description": "ASVspoof 2019 Logical Access, balanced subset: up to 2,500 clips per class from each official partition (seed 42)",
+  "source": "Split counts from the generated reports/results.md (Colab run, 2026-10-11)",
+  "splits": {
+    "train": {"partition": "train", "clips": 5000, "fake": 2500, "real": 2500},
+    "val": {"partition": "development", "clips": 5000, "fake": 2500, "real": 2500},
+    "test": {"partition": "evaluation", "clips": 5000, "fake": 2500, "real": 2500}
+  }
+}

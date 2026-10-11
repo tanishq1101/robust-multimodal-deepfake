@@ -65,22 +65,55 @@ def test_cli(late_fusion_ckpt, video_dir, tmp_path):
 
 def test_find_best_checkpoint(tmp_path, monkeypatch):
     monkeypatch.setenv("DEEPFAKE_DATA_ROOT", str(tmp_path))
-    assert inference.find_best_checkpoint() is None
+    data_ckpts, published = tmp_path / "checkpoints", tmp_path / "models"
+    assert inference.find_best_checkpoint(roots=[data_ckpts, published]) is None
+    (published / "audio_asvspoof_x").mkdir(parents=True)
+    (published / "audio_asvspoof_x" / "best.pt").touch()
+    # the published models/ folder is the fallback ...
+    assert inference.find_best_checkpoint(roots=[data_ckpts, published]).parent.name == "audio_asvspoof_x"
     for run in ["visual_dfdc", "fusion_late_fakeavceleb", "fusion_intermediate_fakeavceleb"]:
-        (tmp_path / "checkpoints" / run).mkdir(parents=True)
-        (tmp_path / "checkpoints" / run / "best.pt").touch()
-    assert inference.find_best_checkpoint().parent.name == "fusion_intermediate_fakeavceleb"
+        (data_ckpts / run).mkdir(parents=True)
+        (data_ckpts / run / "best.pt").touch()
+    # ... and a better model type always wins
+    assert inference.find_best_checkpoint(roots=[data_ckpts, published]).parent.name == "fusion_intermediate_fakeavceleb"
 
 
-def test_gradio_ui(late_fusion_ckpt, video_dir):
+def test_gradio_ui(late_fusion_ckpt, video_dir, tmp_path):
     det = DeepfakeDetector(late_fusion_ckpt, DEVICE, use_face_detector=False)
     assert isinstance(create_demo(det), gr.Blocks)
-    handler = make_handler(det)
-    label, details, faces, spec = handler(str(video_dir / "clip.mp4"), "predicted")
-    assert set(label) == {"FAKE", "REAL"} and abs(sum(label.values()) - 1) < 1e-6
-    assert "Verdict" in details and "Face model" in details and len(faces) == 6 and spec is not None
+    handler = make_handler(det, "fusion model")
+    verdict, evidence, spec, faces, empty, raw, summary = handler("video", str(video_dir / "clip.mp4"), None,
+                                                                  0.5, "predicted")
+    assert raw["verdict"] in ("FAKE", "REAL") and raw["verdict"] in verdict and "fusion model" in verdict
+    assert "Face model" in evidence and "Voice model" in evidence and "not part of" not in evidence
+    assert spec["visible"] and faces["visible"] and len(faces["value"]) == 6 and not empty["visible"]
+    assert "Verdict" in summary and "face_overlays" not in raw
+    # the threshold slider decides the verdict without re-running the model
+    _, _, _, _, _, low, _ = handler("video", str(video_dir / "clip.mp4"), None, 0.01, "predicted")
+    _, _, _, _, _, high, _ = handler("video", str(video_dir / "clip.mp4"), None, 0.99, "predicted")
+    assert (low["verdict"], high["verdict"]) == ("FAKE", "REAL") and low["p_fake"] == high["p_fake"]
     with pytest.raises(gr.Error):
-        handler(None, "predicted")
+        handler("video", None, None, 0.5, "predicted")
+    with pytest.raises(gr.Error):
+        handler("audio", str(video_dir / "clip.mp4"), None, 0.5, "predicted")
+
+
+def test_audio_tab_and_inconclusive(branches, late_fusion_ckpt, video_dir, silent_video, tmp_path):
+    t = np.arange(16000 * 2) / 16000
+    sf.write(tmp_path / "voice.wav", 0.3 * np.sin(2 * np.pi * 440 * t), 16000)
+    audio_det = DeepfakeDetector(branches[2], DEVICE)
+    verdict, evidence, spec, faces, *_ , raw, _ = make_handler(audio_det, "voice model")(
+        "audio", None, str(tmp_path / "voice.wav"), 0.5, "predicted")
+    assert raw["task"] == "audio" and "voice model" in verdict
+    assert evidence.count("not part of the loaded model") == 2 and spec["visible"] and not faces["visible"]
+    # an audio-only model cannot judge a silent video: INCONCLUSIVE, no probability
+    verdict, *_ , raw, _ = make_handler(audio_det)("video", str(silent_video), None, 0.5, "predicted")
+    assert raw["verdict"] == "INCONCLUSIVE" and raw["p_fake"] is None and "INCONCLUSIVE" in verdict
+
+
+def test_verdict_html_empty_state():
+    from deepfake.demo import verdict_html
+    assert "No analysis yet" in verdict_html(None)
 
 
 def test_format_details_single_branch():
