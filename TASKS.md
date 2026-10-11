@@ -16,7 +16,8 @@ Last updated: 2026-10-11
 | D3 | (Optional) Submit Celeb-DF v2 request form | You | ⏳ |
 | R1 | Run notebooks 00 → 01 → 02 in Colab on DFDC + ASVspoof | You | ⬜ |
 | R2 | Run notebook 03: first visual baseline on DFDC | You | ⬜ |
-| P3 | Phase 3: audio branch | Code | ⬜ next |
+| R3 | Run notebook 04 step 1: audio pre-training on ASVspoof | You | ⬜ (no approval needed) |
+| P4 | Phase 4: multimodal fusion | Code | ⬜ next |
 
 ---
 
@@ -54,7 +55,7 @@ Last updated: 2026-10-11
 |---|---|---|---|
 | 2.1 | Training engine | `training/engine.py`: auto device (CUDA/MPS/CPU), AMP on CUDA, grad clipping, atomic checkpoints (`last.pt`, `best.pt`), resume, early stopping on val AUC, `history.csv` | ✅ |
 | 2.2 | Task registry | `training/tasks.py`: model + dataset + forward fn + label key per branch | ✅ |
-| 2.3 | Visual training CLI | `training/train_visual.py`: AdamW (head LR 10×), cosine LR, frozen backbone for epoch 1, class-balanced BCE (`pos_weight = n_real/n_fake`), 8 random frames/video in training, all 16 in eval, flip + brightness/contrast augmentation | ✅ |
+| 2.3 | Visual training CLI | `training/train_visual.py` (thin wrapper over the shared `training/runner.py`): AdamW (head LR 10×), cosine LR, frozen backbone for epoch 1, class-balanced BCE (`pos_weight = n_real/n_fake`), 8 random frames/video in training, all 16 in eval, flip + brightness/contrast augmentation | ✅ |
 | 2.4 | Evaluation | `evaluation/evaluate.py`: `metrics.json` (AUC, EER, ACC, P/R/F1, confusion matrix, metrics at EER threshold), `predictions.csv`, `roc.png`; works cross-dataset | ✅ |
 | 2.5 | Notebook | `03_train_visual.ipynb`: train, curves, test metrics, ROC, score histogram, cross-dataset | ✅ |
 | 2.6 | Tests | train → resume → evaluate smoke test (CPU and MPS) | ✅ |
@@ -63,27 +64,30 @@ Last updated: 2026-10-11
 | 2.9 | Cross-dataset eval on Celeb-DF | report the AUC drop | ⏳ needs 1.11 |
 | 2.10 | Optional tuning | try `--frames-per-video 16`, `efficientnet_b2`, more epochs, LR 3e-4 | ⬜ |
 
-## Phase 3: Audio branch ⬜
+## Phase 3: Audio branch 🔄 (code ✅, training runs pending)
 
 | # | Task | Spec | Status |
 |---|---|---|---|
-| 3.1 | `audio` task in registry | `AudioModel` (ResNet-18, 3-channel repeat), label key `audio_label`, drop rows without audio | ⬜ |
-| 3.2 | `training/train_audio.py` | same engine; random 4 s crop in training, centre crop in eval; `--init-from` to fine-tune a checkpoint | ⬜ |
-| 3.3 | Audio augmentation | SpecAugment-style time/frequency masking | ⬜ |
-| 3.4 | Pre-train on ASVspoof 2019 LA | official train/dev; report EER on eval subset (target ≤ 10%) | ⬜ |
-| 3.5 | Fine-tune on FakeAVCeleb audio | report AUC/EER | ⬜ |
-| 3.6 | Notebook `04_train_audio.ipynb` + tests | | ⬜ |
-| 3.7 | (Stretch) frozen wav2vec2-base features + linear head | comparison row | ⬜ |
+| 3.1 | `audio` task in registry | `AudioModel` (ResNet-18, spectrogram repeated to 3 channels for ImageNet weights), label key `audio_label`; rows without audio or with `audio_label = -1` (DFDC) dropped | ✅ |
+| 3.2 | Shared runner + `train_audio.py` | `training/runner.py` now drives both branches: same CLI, optimizer, freeze schedule, curves, test eval. Audio defaults: dataset `asvspoof`, batch 32. Random 4 s window in training, centre window in eval | ✅ |
+| 3.3 | `--init-from` | load weights from any checkpoint (optimizer not loaded; ignored when resuming) | ✅ |
+| 3.4 | SpecAugment | 2 frequency masks ≤16 bins + 2 time masks ≤40 frames, filled with the mean; training only | ✅ |
+| 3.5 | Per-category evaluation | manifests now have a `category` column; `test/per_category.csv` gives n, mean score and accuracy per category, plus AUC/EER of each fake category vs all reals (= EER per ASVspoof attack A07–A19, per FakeAVCeleb category) | ✅ |
+| 3.6 | Notebook + tests | `04_train_audio.ipynb` (pre-train, fine-tune, pre-training ablation); tests for audio training, init-from, label filtering, SpecAugment, per-category | ✅ |
+| 3.7 | Pre-train on ASVspoof 2019 LA | target eval EER ≤ 10%; record per-attack EER | ⬜ R3 |
+| 3.8 | Fine-tune on FakeAVCeleb audio | `--init-from audio_asvspoof/best.pt --lr 3e-5 --freeze-epochs 0`; report AUC/EER | ⏳ needs 1.10 |
+| 3.9 | Ablation: with vs. without ASVspoof pre-training | table in `reports/results.md` | ⏳ needs 1.10 |
+| 3.10 | (Stretch) frozen wav2vec2-base features + linear head | comparison row | ⬜ |
 
 ## Phase 4: Multimodal fusion ⬜
 
 | # | Task | Spec | Status |
 |---|---|---|---|
-| 4.1 | `fusion` task + `train_fusion.py` | init branches from best Phase 2/3 checkpoints; label key `label` | ⬜ |
+| 4.1 | `fusion` task + `train_fusion.py` | init branches from best Phase 2/3 checkpoints; label key `label`; reuse `training/runner.py` | ⬜ |
 | 4.2 | Late fusion | tune the visual weight on val; no training | ⬜ |
 | 4.3 | Intermediate fusion | freeze branches → train MLP → optionally unfreeze with low LR | ⬜ |
 | 4.4 | Modality dropout | randomly zero one modality in training (missing-modality robustness) | ⬜ |
-| 4.5 | Per-category results | RV-RA / RV-FA / FV-RA / FV-FA accuracy for every model | ⬜ |
+| 4.5 | Per-category results | RV-RA / RV-FA / FV-RA / FV-FA for every model (`per_category.csv` already produced by evaluation) | ⬜ |
 | 4.6 | Comparison table | visual-only · audio-only · late · intermediate | ⬜ |
 | 4.7 | Notebook `05_train_fusion.ipynb` + tests | | ⬜ |
 
@@ -132,3 +136,6 @@ Last updated: 2026-10-11
 | 2026-10-11 | Faces stored as JPEG (q95) inside one `.npz` per video | ~10× smaller than raw arrays; far fewer files on Drive |
 | 2026-10-11 | Visual branch trained on `video_label` | e.g. RealVideo-FakeAudio has a real face; the visual branch must not be blamed for fake audio |
 | 2026-10-11 | Primary metric AUC; early stopping on val AUC | Threshold-free, robust to the heavy class imbalance |
+| 2026-10-11 | One shared training runner for all branches | Identical CLI/behaviour for visual and audio, less code to maintain |
+| 2026-10-11 | Audio branch trained on `audio_label`; DFDC excluded from it | DFDC does not label audio fakes separately |
+| 2026-10-11 | Audio: ASVspoof pre-training → FakeAVCeleb fine-tuning | ASVspoof is much larger and speech-focused; ablation planned to verify the benefit |

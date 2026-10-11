@@ -235,14 +235,8 @@ from pathlib import Path
 from IPython.display import Image, display
 
 run_dir = Path(cfg["paths"]["checkpoints"]) / RUN
-h = pd.read_csv(run_dir / "history.csv")
-fig, ax = plt.subplots(1, 2, figsize=(11, 3.5))
-ax[0].plot(h.epoch, h.train_loss, "o-", label="train"); ax[0].plot(h.epoch, h.val_loss, "o-", label="val")
-ax[0].set(title="loss", xlabel="epoch"); ax[0].legend()
-ax[1].plot(h.epoch, h.val_auc, "o-", label="val AUC"); ax[1].plot(h.epoch, h.val_acc, "o-", label="val acc")
-ax[1].set(title="validation", xlabel="epoch", ylim=(0, 1)); ax[1].legend()
-plt.tight_layout(); fig.savefig(run_dir / "curves.png", dpi=150)
-h
+display(Image(str(run_dir / "curves.png")))   # saved by the training script
+pd.read_csv(run_dir / "history.csv")
 """),
     md("## Test results"),
     code("""
@@ -270,8 +264,70 @@ if os.path.exists(f"{cfg['paths']['processed']}/{OTHER}/index.csv"):
 """),
 ], gpu=True)
 
+nb04 = notebook([
+    md("""
+# 04 · Phase 3: train the audio branch
+ResNet-18 (ImageNet-pretrained) on log-mel spectrograms, two steps:
+1. **Pre-train on ASVspoof 2019 LA**: lots of bona fide vs. synthetic/converted speech.
+2. **Fine-tune on FakeAVCeleb audio**: adapts to the cloned voices in our main dataset.
+
+- **Runtime:** T4 GPU. **Needs:** `processed/asvspoof/index.csv` (and `processed/fakeavceleb/`) from notebook 02.
+- DFDC has no separate audio labels, so it is not used for this branch.
+- **Disconnected?** Re-run setup + the same cell: training resumes from `last.pt`.
+"""),
+    code(SETUP),
+    code("""
+import json, os, pandas as pd
+from pathlib import Path
+from IPython.display import Image, display
+CKPT = Path(cfg["paths"]["checkpoints"])
+
+def show_run(run):
+    run_dir = CKPT / run
+    display(Image(str(run_dir / "curves.png")))
+    m = json.loads((run_dir / "test" / "metrics.json").read_text())
+    print({k: round(v, 4) if isinstance(v, float) else v for k, v in m.items() if k not in ("index", "checkpoint")})
+    display(Image(str(run_dir / "test" / "roc.png")))
+    if (run_dir / "test" / "per_category.csv").exists():
+        display(pd.read_csv(run_dir / "test" / "per_category.csv").round(4))
+"""),
+    md("## Step 1: pre-train on ASVspoof 2019 LA"),
+    code("""
+!python -m deepfake.training.train_audio --dataset asvspoof --run-name audio_asvspoof --epochs 15 --batch-size 32 --workers 2
+"""),
+    md("""
+Results. `per_category` lists the **EER for each attack system**. The ASVspoof eval set contains
+attacks (A07–A19) never seen in training, so this measures generalisation to new voice-cloning methods.
+"""),
+    code('show_run("audio_asvspoof")'),
+    md("## Step 2: fine-tune on FakeAVCeleb audio"),
+    code("""
+if os.path.exists(f"{cfg['paths']['processed']}/fakeavceleb/index.csv"):
+    !python -m deepfake.training.train_audio --dataset fakeavceleb --run-name audio_fakeavceleb --init-from {CKPT}/audio_asvspoof/best.pt --lr 3e-5 --freeze-epochs 0 --epochs 10 --batch-size 32 --workers 2
+else:
+    print("FakeAVCeleb not preprocessed yet: run notebooks 01 + 02 once access is approved.")
+"""),
+    code("""
+if (CKPT / "audio_fakeavceleb" / "test" / "metrics.json").exists():
+    show_run("audio_fakeavceleb")
+"""),
+    md("""
+## Ablation: does ASVspoof pre-training help?
+Train on FakeAVCeleb from ImageNet weights only and compare test AUC/EER with step 2.
+"""),
+    code("""
+if os.path.exists(f"{cfg['paths']['processed']}/fakeavceleb/index.csv"):
+    !python -m deepfake.training.train_audio --dataset fakeavceleb --run-name audio_fakeavceleb_noprt --epochs 10 --batch-size 32 --workers 2
+    rows = []
+    for run in ["audio_fakeavceleb_noprt", "audio_fakeavceleb"]:
+        m = json.loads((CKPT / run / "test" / "metrics.json").read_text())
+        rows.append({"run": run, "auc": m["auc"], "eer": m["eer"], "accuracy": m["accuracy"]})
+    display(pd.DataFrame(rows).round(4))
+"""),
+], gpu=True)
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, nb in [("00_colab_setup", nb00), ("01_download_datasets", nb01), ("02_preprocess", nb02),
-                 ("03_train_visual", nb03)]:
+                 ("03_train_visual", nb03), ("04_train_audio", nb04)]:
     (OUT / f"{name}.ipynb").write_text(json.dumps(nb, indent=1) + "\n")
     print("wrote", name)

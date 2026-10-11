@@ -1,11 +1,13 @@
 """Per-branch definitions shared by training and evaluation: model, dataset, forward pass.
 
-Phase 2 registers "visual"; Phase 3 adds "audio"; Phase 4 adds "fusion".
+  visual  (Phase 2)  EfficientNet on face crops        label: video_label
+  audio   (Phase 3)  ResNet-18 on log-mel spectrograms label: audio_label
+  fusion  (Phase 4)  added later
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import albumentations as A
@@ -13,9 +15,11 @@ import numpy as np
 import torch
 from torch import nn
 
-from deepfake.datasets import VisualDataset
-from deepfake.models import VisualModel
+from deepfake.datasets import AudioDataset, VisualDataset
+from deepfake.models import AudioModel, VisualModel
 
+
+# --------------------------------------------------------------------------- augmentation
 
 class FrameAugment:
     """Light training augmentation for face crops (picklable for DataLoader workers).
@@ -30,6 +34,33 @@ class FrameAugment:
     def __call__(self, img: np.ndarray) -> np.ndarray:
         return self.aug(image=img)["image"]
 
+
+class SpecAugment:
+    """SpecAugment-style masking (Park et al., 2019) on a log-mel [n_mels, frames] array:
+    a few random frequency bands and time spans are replaced by the spectrogram mean."""
+
+    def __init__(self, freq_masks: int = 2, freq_width: int = 16, time_masks: int = 2,
+                 time_width: int = 40):
+        self.freq_masks, self.freq_width = freq_masks, freq_width
+        self.time_masks, self.time_width = time_masks, time_width
+
+    def __call__(self, mel: np.ndarray) -> np.ndarray:
+        mel = mel.copy()
+        rng = np.random.default_rng(int(torch.randint(0, 2**31 - 1, (1,))))
+        fill = mel.mean()
+        n_mels, n_frames = mel.shape
+        for _ in range(self.freq_masks):
+            w = int(rng.integers(0, self.freq_width + 1))
+            f0 = int(rng.integers(0, max(1, n_mels - w)))
+            mel[f0:f0 + w, :] = fill
+        for _ in range(self.time_masks):
+            w = int(rng.integers(0, self.time_width + 1))
+            t0 = int(rng.integers(0, max(1, n_frames - w)))
+            mel[:, t0:t0 + w] = fill
+        return mel
+
+
+# --------------------------------------------------------------------------- visual
 
 def visual_forward(model: VisualModel, batch: dict) -> torch.Tensor:
     return model(batch["frames"], batch["frame_mask"])["logit"]
@@ -49,14 +80,39 @@ def build_visual_dataset(index_csv, split: str, cfg: dict, train: bool, run_conf
     return ds
 
 
+# --------------------------------------------------------------------------- audio
+
+def audio_forward(model: AudioModel, batch: dict) -> torch.Tensor:
+    return model(batch["mel"])["logit"]
+
+
+def build_audio_model(run_config: dict, pretrained: bool) -> nn.Module:
+    return AudioModel(run_config["backbone"], pretrained=pretrained, dropout=run_config["dropout"])
+
+
+def build_audio_dataset(index_csv, split: str, cfg: dict, train: bool, run_config: dict):
+    ds = AudioDataset(index_csv, split, cfg, train=train,
+                      mel_transform=SpecAugment() if train and run_config.get("augment", True) else None)
+    # The audio branch learns "is the VOICE fake": FakeAVCeleb FakeVideo-RealAudio has
+    # audio_label 0. DFDC has no audio labels (-1) and is dropped here.
+    ds.df = ds.df[ds.df["audio_label"].astype(int) >= 0].reset_index(drop=True)
+    return ds
+
+
+# --------------------------------------------------------------------------- registry
+
 @dataclass
 class Task:
     build_model: Callable[[dict, bool], nn.Module]
     build_dataset: Callable
     forward: Callable[[nn.Module, dict], torch.Tensor]
     label_key: str
+    defaults: dict = field(default_factory=dict)  # task-specific CLI defaults
 
 
 TASKS = {
-    "visual": Task(build_visual_model, build_visual_dataset, visual_forward, "video_label"),
+    "visual": Task(build_visual_model, build_visual_dataset, visual_forward, "video_label",
+                   defaults={"dataset": "dfdc", "backbone_key": "visual_backbone", "batch_size": 8}),
+    "audio": Task(build_audio_model, build_audio_dataset, audio_forward, "audio_label",
+                  defaults={"dataset": "asvspoof", "backbone_key": "audio_backbone", "batch_size": 32}),
 }

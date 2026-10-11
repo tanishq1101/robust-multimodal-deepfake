@@ -75,6 +75,7 @@ def test_manifest_fakeavceleb(tmp_path):
     assert len(df) == 8
     rvfa = df[df.sample_id.str.startswith("RealVideo-FakeAudio")].iloc[0]
     assert (rvfa.label, rvfa.video_label, rvfa.audio_label) == (1, 0, 1)
+    assert rvfa.category == "RealVideo-FakeAudio"
     assert set(df.group) == {"id00001", "id00002"}
     assert not df.path.str.startswith("/").any()
 
@@ -102,6 +103,7 @@ def test_manifest_asvspoof(tmp_path):
     df = build_asvspoof(tmp_path / "raw" / "asvspoof", tmp_path / "raw")
     assert list(df.split) == ["train", "train", "val", "test"]
     assert list(df.label) == [0, 1, 0, 1]
+    assert list(df.category) == ["bonafide", "A01", "bonafide", "A10"]
     assert df.path.iloc[0] == "asvspoof/LA/ASVspoof2019_LA_train/flac/LA_T_1.flac"
 
 

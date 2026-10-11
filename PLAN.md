@@ -1,7 +1,7 @@
 # Robust Multimodal Deepfake Analysis: Project Plan
 
 **Type:** College project · **Compute:** Google Colab (GPU) for training, Mac for coding
-**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ (training run pending) · next: Phase 3
+**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ (training runs pending) · next: Phase 4
 **Task tracker:** [TASKS.md](TASKS.md)
 
 ---
@@ -116,12 +116,12 @@ DeepFake/
 │   ├── preprocessing/   frames.py · faces.py · audio.py · run.py
 │   ├── datasets/        multimodal.py · visual.py · audio.py
 │   ├── models/          visual.py · audio.py · fusion.py
-│   ├── evaluation/      metrics.py · evaluate.py   (+ robustness_eval.py later)
+│   ├── evaluation/      metrics.py · evaluate.py · plots.py   (+ robustness_eval.py later)
 │   ├── robustness/      degradations.py  (Phase 5)
 │   ├── explainability/  gradcam.py       (Phase 6)
-│   └── training/        engine.py · tasks.py · train_visual.py   (+ audio, fusion)
+│   └── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py   (+ fusion)
 ├── app/app.py           (Phase 7)
-├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual
+├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio
 ├── scripts/             make_notebooks.py
 ├── tests/               test_metrics · test_preprocessing · test_models
 └── reports/             figures + results (later)
@@ -133,7 +133,7 @@ DeepFake/
 
 ### Phase 0: Setup ✅
 - Repo structure, requirements, config, README, `.gitignore`, installable package.
-- Local Python 3.11 venv; pytest suite (21 tests).
+- Local Python 3.11 venv; pytest suite.
 - Colab setup notebook.
 
 ### Phase 1: Data pipeline ✅ code / ⏳ data
@@ -151,10 +151,13 @@ DeepFake/
 - **Remaining:** run on DFDC (baseline), then FakeAVCeleb (main), then cross-dataset on Celeb-DF.
 - **Deliverable:** checkpoint, AUC/ACC/F1, training curves.
 
-### Phase 3: Audio branch
-- ResNet-18 on log-mel spectrograms: pre-train on ASVspoof 2019 LA, fine-tune on FakeAVCeleb audio.
+### Phase 3: Audio branch ✅ code / ⬜ training runs
+- `training/train_audio.py` on the shared `training/runner.py`: ResNet-18 on log-mel, SpecAugment, random 4 s windows.
+- Pre-train on ASVspoof 2019 LA, then fine-tune on FakeAVCeleb audio with `--init-from`.
+- Per-category evaluation: EER per ASVspoof attack (A07–A19) and per FakeAVCeleb category.
+- Notebook `04_train_audio.ipynb`, including an ablation with and without pre-training.
 - (Stretch) frozen wav2vec2 features as a comparison.
-- **Deliverable:** checkpoint, EER/AUC, curves.
+- **Deliverable:** checkpoint, EER/AUC, per-attack table, curves.
 
 ### Phase 4: Multimodal fusion
 - Late fusion (weight tuned on val) vs. intermediate fusion (branches initialised from Phases 2–3).

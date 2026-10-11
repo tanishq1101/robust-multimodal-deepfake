@@ -1,48 +1,60 @@
-"""End-to-end smoke test of Phase 2: preprocess -> train visual branch -> resume -> evaluate."""
+"""End-to-end smoke tests: preprocess -> train (visual / audio) -> resume -> evaluate."""
 
 import json
 import os
 import shutil
 import subprocess
 
+import numpy as np
 import pandas as pd
 import pytest
 import torch
 
 from deepfake.preprocessing import run as prep
-from deepfake.training import train_visual
+from deepfake.evaluation.evaluate import per_category
+from deepfake.training import train_audio, train_visual
 from deepfake.training.engine import load_checkpoint
-from deepfake.training.tasks import TASKS
+from deepfake.training.tasks import TASKS, SpecAugment
 
 DEVICE = os.environ.get("DEEPFAKE_TEST_DEVICE", "cpu")
 
 
 @pytest.fixture(scope="module")
 def tiny_index(tmp_path_factory):
-    """8 synthetic clips: 'real' = test pattern, 'fake' = colour bars; split 4/2/2."""
+    """8 synthetic clips, split 4/2/2.
+    real: test-pattern video + 440 Hz tone · fake: colour bars + pink noise."""
     if shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg not installed")
     vids = tmp_path_factory.mktemp("tiny_videos")
     for i in range(8):
-        src = "testsrc" if i % 2 == 0 else "smptebars"
-        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"{src}=duration=1:size=160x120:rate=10",
-                        "-pix_fmt", "yuv420p", str(vids / f"v{i}.mp4")], check=True)
+        video = "testsrc" if i % 2 == 0 else "smptebars"
+        audio = "sine=frequency=440:duration=1" if i % 2 == 0 else "anoisesrc=d=1:c=pink"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"{video}=duration=1:size=160x120:rate=10",
+                        "-f", "lavfi", "-i", audio, "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+                        str(vids / f"v{i}.mp4")], check=True)
     out = tmp_path_factory.mktemp("tiny_processed")
     prep.main(["--input", str(vids), "--out", str(out), "--workers", "1", "--no-detector"])
     idx = pd.read_csv(out / "index.csv", keep_default_na=False)
     n = idx.sample_id.str[1:].astype(int)
-    idx["label"] = idx["video_label"] = n % 2
+    idx["label"] = idx["video_label"] = idx["audio_label"] = n % 2
+    idx["category"] = ["FakeVideo-FakeAudio" if k % 2 else "RealVideo-RealAudio" for k in n]
     idx["split"] = ["train" if k < 4 else "val" if k < 6 else "test" for k in n]
     idx.to_csv(out / "index.csv", index=False)
     return out / "index.csv"
 
 
+COMMON = ["--batch-size", "2", "--no-pretrained", "--device", DEVICE, "--workers", "0",
+          "--freeze-epochs", "1", "--patience", "10"]
+
+
 def _train(index, epochs, extra=()):
-    return train_visual.main([
-        "--index", str(index), "--run-name", "smoke", "--epochs", str(epochs), "--batch-size", "2",
-        "--frames-per-video", "2", "--no-pretrained", "--device", DEVICE, "--workers", "0",
-        "--freeze-epochs", "1", "--patience", "10", *extra,
-    ])
+    return train_visual.main(["--index", str(index), "--run-name", "smoke", "--epochs", str(epochs),
+                              "--frames-per-video", "2", *COMMON, *extra])
+
+
+def _train_audio(index, run_name, epochs, extra=()):
+    return train_audio.main(["--index", str(index), "--run-name", run_name, "--epochs", str(epochs),
+                             *COMMON, *extra])
 
 
 def test_train_resume_evaluate(tiny_index, tmp_path, monkeypatch):
@@ -74,3 +86,54 @@ def test_frame_subsampling(tiny_index, cfg):
     assert train[0]["frames"].shape[0] == 4
     assert val[0]["frames"].shape[0] == cfg["video"]["num_frames"]
     assert not torch.equal(train[0]["frames"], torch.zeros_like(train[0]["frames"]))
+
+
+def test_audio_train_and_init_from(tiny_index, tmp_path, monkeypatch):
+    monkeypatch.setenv("DEEPFAKE_DATA_ROOT", str(tmp_path))
+    run_dir = _train_audio(tiny_index, "audio_smoke", epochs=2)
+    for f in ["best.pt", "history.csv", "curves.png", "test/metrics.json", "test/per_category.csv"]:
+        assert (run_dir / f).exists(), f
+    assert json.loads((run_dir / "config.json").read_text())["task"] == "audio"
+    cats = pd.read_csv(run_dir / "test" / "per_category.csv")
+    assert set(cats.category) == {"RealVideo-RealAudio", "FakeVideo-FakeAudio"}
+
+    # Fine-tune from the pre-trained checkpoint; with lr=0 the head must keep its weights.
+    ft_dir = _train_audio(tiny_index, "audio_ft", epochs=1,
+                          extra=["--init-from", str(run_dir / "best.pt"), "--lr", "0"])
+    init = torch.load(run_dir / "best.pt", weights_only=False)["model"]
+    tuned = torch.load(ft_dir / "last.pt", weights_only=False)["model"]
+    assert torch.equal(init["head.1.weight"], tuned["head.1.weight"])
+
+
+def test_audio_dataset_drops_unlabelled(tiny_index, tmp_path, cfg):
+    idx = pd.read_csv(tiny_index, keep_default_na=False)
+    idx.loc[idx.split == "train", "audio_label"] = -1   # e.g. DFDC has no audio labels
+    path = tmp_path / "index.csv"
+    idx.to_csv(path, index=False)
+    import shutil as sh
+    for d in ("faces", "mel"):
+        sh.copytree(tiny_index.parent / d, tmp_path / d)
+    assert len(TASKS["audio"].build_dataset(path, "train", cfg, True, {})) == 0
+    assert len(TASKS["audio"].build_dataset(path, "val", cfg, False, {})) == 2
+
+
+def test_spec_augment_masks():
+    mel = np.random.default_rng(0).normal(size=(128, 401)).astype(np.float32)
+    out = SpecAugment(freq_masks=2, freq_width=16, time_masks=2, time_width=40)(mel)
+    assert out.shape == mel.shape
+    assert not np.array_equal(out, mel)
+    assert np.array_equal(SpecAugment(0, 0, 0, 0)(mel), mel)
+
+
+def test_per_category_breakdown():
+    pred = pd.DataFrame({
+        "category": ["bonafide"] * 4 + ["A07"] * 2 + ["A17"] * 2,
+        "label": [0, 0, 0, 0, 1, 1, 1, 1],
+        "score": [0.1, 0.2, 0.3, 0.4, 0.9, 0.8, 0.35, 0.05],
+    })
+    cats = per_category(pred).set_index("category")
+    assert cats.loc["A07", "eer_vs_real"] == 0.0      # easy attack
+    assert cats.loc["A17", "eer_vs_real"] > 0.3       # hard attack (AUC 3/8)
+    assert cats.loc["A17", "auc_vs_real"] == 0.375
+    assert cats.loc["bonafide", "accuracy"] == 1.0
+    assert "eer_vs_real" not in cats.columns or np.isnan(cats.loc["bonafide", "eer_vs_real"])

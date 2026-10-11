@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
             "sample_id": [str(f.relative_to(media_root).with_suffix("")) for f in files],
             "source": "custom", "path": [str(f.relative_to(media_root)) for f in files],
             "modality": "av", "label": -1, "video_label": -1, "audio_label": -1,
-            "group": [f.stem for f in files], "split": "test",
+            "group": [f.stem for f in files], "split": "test", "category": "",
         })
         index_path = out_root / "index.csv"
     elif args.dataset:
