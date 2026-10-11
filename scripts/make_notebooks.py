@@ -450,9 +450,75 @@ less AUC under degradations at a small cost (if any) on clean data. Copy `robust
 """),
 ], gpu=True)
 
+nb07 = notebook([
+    md("""
+# 07 · Phase 6: explainability (Grad-CAM)
+Shows **where** the model looks: heatmaps over the face frames and over the spectrogram.
+For the fusion model, one backward pass of the *fused* decision explains both modalities at once.
+
+- **Gallery:** for every category, the most confident correct predictions and the most confident mistakes.
+- **Single sample:** explain any test clip, as evidence for fake or for real.
+
+**Needs:** a trained checkpoint (notebooks 03–06). A GPU helps but isn't required.
+"""),
+    code(SETUP),
+    code("""
+import pandas as pd, matplotlib.pyplot as plt
+from pathlib import Path
+from IPython.display import Image, Markdown, display
+DATASET = "fakeavceleb"
+CKPT = Path(cfg["paths"]["checkpoints"])
+# first existing checkpoint in this order
+for run in [f"fusion_intermediate_{DATASET}_robust", f"fusion_intermediate_{DATASET}", f"visual_{DATASET}", "visual_dfdc", "audio_asvspoof"]:
+    if (CKPT / run / "best.pt").exists():
+        RUN = run; break
+print("explaining:", RUN)
+OUT = Path(cfg["paths"]["outputs"]) / f"gallery_{RUN}"
+"""),
+    md("## Gallery"),
+    code("""
+ds_name = "asvspoof" if RUN.startswith("audio_asvspoof") else ("dfdc" if RUN.endswith("dfdc") else DATASET)
+!python -m deepfake.explainability.gallery --checkpoint {CKPT}/{RUN}/best.pt --dataset {ds_name} --per-category 2 --out {OUT}
+g = pd.read_csv(OUT / "gallery.csv")
+display(g)
+for f in g.file[:8]:
+    display(Image(str(OUT / f)))
+"""),
+    md("## Explain one clip"),
+    code("""
+import torch
+from deepfake.explainability import explain, render_explanation
+from deepfake.explainability.gallery import load_model
+from deepfake.training.tasks import TASKS
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model, rc = load_model(CKPT / RUN / "best.pt", device)
+index = Path(cfg["paths"]["processed"]) / ds_name / "index.csv"
+ds = TASKS[rc["task"]].build_dataset(index, "test", cfg, False, rc)
+print(len(ds), "test clips; categories:", ds.df.get("category", pd.Series()).unique()[:8])
+"""),
+    code("""
+i = 0                      # change to explore other clips
+TARGET = "predicted"       # or "fake" / "real"
+batch = {k: v[None].to(device) for k, v in ds[i].items()}
+exp = explain(model, rc["task"], batch, target=TARGET)
+row = ds.df.iloc[i]
+fig = render_explanation(batch, exp, title=f"{row.get('category', '')} · {row.sample_id} · label {int(row.label)}")
+plt.show()
+"""),
+    md("""
+**Reading the heatmaps:** red = strong evidence for the explained class. Typical deepfake cues
+are blending boundaries around the face, mouth and teeth regions, and eyes. For audio, look at
+formant/harmonic structure and high-frequency bands, where vocoders leave artefacts. Grad-CAM is
+coarse (7×7 per face, 4×13 per spectrogram), so read it as regions, not pixels. Copy good
+examples into `reports/figures/`.
+"""),
+])
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, nb in [("00_colab_setup", nb00), ("01_download_datasets", nb01), ("02_preprocess", nb02),
                  ("03_train_visual", nb03), ("04_train_audio", nb04),
-                 ("05_train_fusion", nb05), ("06_robustness", nb06)]:
+                 ("05_train_fusion", nb05), ("06_robustness", nb06),
+                 ("07_explainability", nb07)]:
     (OUT / f"{name}.ipynb").write_text(json.dumps(nb, indent=1) + "\n")
     print("wrote", name)

@@ -92,7 +92,18 @@ Cross-dataset (visual branch, trained on FakeAVCeleb → tested on Celeb-DF):
 | visual (standard) | | |
 | visual (robust) | | |
 
-## Phase 6: Explainability (todo)
+## Phase 6: Explainability (`outputs/gallery_<run>/index.md`)
+
+Grad-CAM of the final fusion model, explaining the predicted class.
+
+| Category | Correct example | Mistake | What the heatmap focuses on |
+|---|---|---|---|
+| RealVideo-RealAudio | | | |
+| RealVideo-FakeAudio | | | |
+| FakeVideo-RealAudio | | | |
+| FakeVideo-FakeAudio | | | |
+
+Figures: `reports/figures/gradcam_*.png`
 
 ## Observations
 

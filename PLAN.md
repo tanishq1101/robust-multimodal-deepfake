@@ -1,7 +1,7 @@
 # Robust Multimodal Deepfake Analysis: Project Plan
 
 **Type:** College project · **Compute:** Google Colab (GPU) for training, Mac for coding
-**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ · Phase 5 code ✅ (runs pending) · next: Phase 6
+**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ · Phase 5 code ✅ · Phase 6 code ✅ (runs pending) · next: Phase 7
 **Task tracker:** [TASKS.md](TASKS.md)
 
 ---
@@ -118,10 +118,10 @@ DeepFake/
 │   ├── models/          visual.py · audio.py · fusion.py
 │   ├── evaluation/      metrics.py · evaluate.py · compare.py · robustness_eval.py · plots.py
 │   ├── robustness/      degradations.py
-│   ├── explainability/  gradcam.py       (Phase 6)
+│   ├── explainability/  gradcam.py · gallery.py
 │   └── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py · train_fusion.py
 ├── app/app.py           (Phase 7)
-├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion · 06_robustness
+├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion · 06_robustness · 07_explainability
 ├── scripts/             make_notebooks.py
 ├── tests/               test_metrics · test_preprocessing · test_models
 └── reports/             results.md (template) + figures
@@ -175,9 +175,10 @@ DeepFake/
 - Cross-dataset test on Celeb-DF.
 - **Deliverable:** robustness tables and "metric vs. severity" plots.
 
-### Phase 6: Explainability
-- Grad-CAM on face crops and spectrograms.
-- Gallery of correct and incorrect predictions.
+### Phase 6: Explainability ✅ code / ⬜ runs
+- `explainability/gradcam.py`: hook-based Grad-CAM for the visual, audio and fusion models. For fusion, the fused decision is explained on the face frames and the spectrogram at once.
+- `explainability/gallery.py`: the most confident correct and wrong examples per category, saved as PNGs plus an index.
+- Notebook `07_explainability.ipynb`.
 
 ### Phase 7: Demo app
 - Gradio app: upload a video → verdict, per-modality scores, heatmaps.

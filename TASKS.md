@@ -17,7 +17,7 @@ Last updated: 2026-10-11
 | R1 | Run notebooks 00 → 01 → 02 in Colab on DFDC + ASVspoof | You | ⬜ |
 | R2 | Run notebook 03: first visual baseline on DFDC | You | ⬜ |
 | R3 | Run notebook 04 step 1: audio pre-training on ASVspoof | You | ⬜ (no approval needed) |
-| P6 | Phase 6: explainability (Grad-CAM) | Code | ⬜ next |
+| P7 | Phase 7: Gradio demo app | Code | ⬜ next |
 
 ---
 
@@ -109,13 +109,19 @@ Last updated: 2026-10-11
 | 5.10 | Cross-dataset test on Celeb-DF | `evaluation.evaluate --dataset celebdf` (standard vs robust visual model) | ⏳ needs 1.11 |
 | 5.11 | Figures into `reports/figures/` + numbers into `reports/results.md` | | ⏳ |
 
-## Phase 6: Explainability ⬜
+## Phase 6: Explainability 🔄 (code ✅, runs pending)
 
 | # | Task | Spec | Status |
 |---|---|---|---|
-| 6.1 | Visual Grad-CAM | target `visual.backbone.conv_head`; overlay on face crops | ⬜ |
-| 6.2 | Audio Grad-CAM | target `audio.backbone.layer4`; overlay on spectrogram | ⬜ |
-| 6.3 | Gallery | correct and incorrect examples per category | ⬜ |
+| 6.1 | Grad-CAM core | `explainability/gradcam.py`, own hook-based implementation (the fusion model has several inputs). `explain(model, task, batch, target)` works for visual, audio and fusion; target = predicted / fake / real | ✅ |
+| 6.2 | Visual Grad-CAM | layer `backbone.bn2` (EfficientNet, 7×7 per frame) → upsampled to 224², one shared scale across frames, padded frames zeroed | ✅ |
+| 6.3 | Audio Grad-CAM | layer `backbone.layer4` (ResNet-18, 4×13) → upsampled to 128 × 401 | ✅ |
+| 6.4 | Fusion Grad-CAM | one backward pass of the fused logit gives face + spectrogram maps; a missing modality gets no map | ✅ |
+| 6.5 | Rendering | `render_explanation`: frames, overlays (JET), spectrogram + CAM, P(fake) and explained class in the title | ✅ |
+| 6.6 | Gallery CLI | `explainability/gallery.py`: per category, the most confident correct and wrong examples → PNGs + `gallery.csv` + `index.md` | ✅ |
+| 6.7 | Notebook + tests | `07_explainability.ipynb`; 7 tests incl. a faithfulness check (toy model, CAM must cover exactly the evidence region and be empty for the opposite class) | ✅ |
+| 6.8 | Run gallery on the final fusion model | pick 4–8 figures for the report | ⏳ needs 4.7 |
+| 6.9 | (Optional) sanity checks | model-randomisation test (Adebayo et al., 2018); deletion curve | ⬜ |
 
 ## Phase 7: Demo app ⬜
 
@@ -151,3 +157,5 @@ Last updated: 2026-10-11
 | 2026-10-11 | Comparison scores all models against the overall label on the same samples | Fair table: single-branch models are penalised for the fake type they cannot see |
 | 2026-10-11 | Video degradations applied to stored face crops, not the full original frames | No raw video needed after preprocessing and much cheaper; documented as an approximation of platform re-compression |
 | 2026-10-11 | Store a 16 kHz FLAC waveform per clip | MP3 / additive noise must act on the waveform, not the spectrogram; ~32 KB/s, acceptable on Drive |
+| 2026-10-11 | Own Grad-CAM implementation instead of `pytorch-grad-cam` | The fusion model has 5 inputs; hooks give face + audio maps from one backward pass of the fused decision |
+| 2026-10-11 | Heatmaps explain the predicted class by default | Shows why the model decided what it did; fake / real targets available for contrast |
