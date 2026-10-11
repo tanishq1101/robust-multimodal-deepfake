@@ -260,8 +260,9 @@ all 2,500 bona fide test clips):
 | A19 | 193 | 99.5% | 0.9988 | 0.40% |
 | bona fide | 2,500 | 99.2% accepted | – | – |
 
-- **Easy attacks:** A07, A08, A09, A11, A14 and A16 are detected completely (AUC ≥ 0.9997).
-  A16 and A19 reuse the training-set algorithms A04 and A06, so their high scores are expected.
+- **Easy attacks:** A07, A08, A09, A11, A14 and A16 are detected completely (AUC ≥ 0.9997), and
+  A19 nearly so (99.5%, AUC 0.9988). A16 and A19 reuse the training-set algorithms A04 and A06,
+  so their high scores are expected.
 - **Ranked well but under-detected at 0.5:** A10, A12, A13 and A18 keep AUC ≥ 0.985, yet only
   64–80% of their clips cross the 0.5 threshold. The model ranks them above bona fide speech,
   but the fixed threshold misses many of them.
