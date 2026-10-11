@@ -80,6 +80,7 @@ def evaluate_checkpoint(checkpoint: str | Path, index: str | Path, split: str, c
     device = torch.device(device) if isinstance(device, str) else (device or get_device())
     ckpt = torch.load(checkpoint, map_location="cpu", weights_only=False)
     run_config = ckpt["run_config"]
+    cfg = {**cfg, **run_config.get("preprocessing", {})}
     task = TASKS[run_config["task"]]
 
     label_key = label_key or task.label_key

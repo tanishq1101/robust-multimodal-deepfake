@@ -56,6 +56,7 @@ def build_gallery(checkpoint: Path, index: Path, split: str, cfg: dict, out: Pat
 
     device = torch.device(device) if isinstance(device, str) else (device or get_device())
     model, rc = load_model(checkpoint, device)
+    cfg = {**cfg, **rc.get("preprocessing", {})}
     task = TASKS[rc["task"]]
     ds = task.build_dataset(index, split, cfg, False, rc)
     if limit and len(ds) > limit:

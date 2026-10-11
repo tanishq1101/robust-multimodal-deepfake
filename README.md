@@ -1,8 +1,8 @@
 # Robust Multimodal Deepfake Analysis
 
-Detects deepfake videos by checking both the **face** (video) and the **voice** (audio). It is
-tested and trained to stay reliable under compression and noise, and it explains every decision
-with Grad-CAM heatmaps.
+PyTorch research pipeline for detecting deepfake videos using the **face** (video) and the
+**voice** (audio), with robustness testing and Grad-CAM heatmaps. The software is tested on
+synthetic data; real-dataset training and detection accuracy have not yet been verified.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ uv venv --python 3.11 .venv          # or: python3.11 -m venv .venv
 source .venv/bin/activate
 uv pip install -r requirements.txt   # or: pip install -r requirements.txt
 pip install -e .
-pytest                               # 58 tests on synthetic videos (needs ffmpeg)
+pytest                               # synthetic workflow and regression tests (needs ffmpeg)
 ```
 
 ### On Google Colab (data, training, evaluation)
@@ -71,6 +71,7 @@ python -m deepfake.inference clip.mp4 --out result/     # command line: JSON + e
 ```
 The app warns when no face is found or the clip has no audio. It is a research prototype: scores
 are model estimates, not forensic proof.
+It returns `INCONCLUSIVE` with no probability when the model's required evidence is absent.
 
 ## Command-line tools
 ```bash
@@ -116,6 +117,8 @@ tests/                    pytest suite
 ## Status
 All code (Phases 0–8) is implemented and tested on synthetic data. The training runs on the
 real datasets are pending dataset access. Detailed checklist: [TASKS.md](TASKS.md).
+The notebooks contain training commands, not completed training results. See
+[reports/review.md](reports/review.md) for the code review, fixes, and verification limits.
 
 - [x] Phase 0: project setup
 - [x] Phase 1: data pipeline (waiting on dataset access)

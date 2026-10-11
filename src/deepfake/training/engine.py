@@ -69,6 +69,9 @@ def save_checkpoint(path: Path, model, optimizer, scheduler, scaler, state: Trai
         "scaler": scaler.state_dict() if scaler else None,
         "state": asdict(state),
         "run_config": run_config,
+        "rng": {"python": random.getstate(), "numpy": np.random.get_state(),
+                "torch": torch.get_rng_state(),
+                "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None},
     }, tmp)
     tmp.replace(path)  # atomic: a disconnect mid-save never corrupts the previous checkpoint
 
@@ -90,6 +93,11 @@ def train_one_epoch(model, loader: DataLoader, forward_fn: ForwardFn, criterion,
                     device: torch.device, scaler=None, label_key: str = "label",
                     grad_clip: float = 1.0, desc: str = "train") -> float:
     model.train()
+    # requires_grad=False alone does not freeze BatchNorm buffers or dropout.
+    for module in model.modules():
+        params = list(module.parameters())
+        if params and not any(p.requires_grad for p in params):
+            module.eval()
     total, n = 0.0, 0
     for batch in tqdm(loader, desc=desc, leave=False):
         batch = to_device(batch, device)
@@ -97,6 +105,8 @@ def train_one_epoch(model, loader: DataLoader, forward_fn: ForwardFn, criterion,
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, enabled=scaler is not None):
             loss = criterion(forward_fn(model, batch).float(), y)
+        if not torch.isfinite(loss):
+            raise ValueError("Non-finite training loss; check input tensors and labels")
         if scaler is not None:
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -144,13 +154,34 @@ def fit(model, train_loader, val_loader, forward_fn: ForwardFn, criterion, optim
         on_epoch_start: Callable[[nn.Module, int], None] | None = None) -> TrainState:
     """Full training loop with checkpointing, resume and early stopping."""
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "config.json").write_text(json.dumps(run_config, indent=2, default=str))
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
     last = run_dir / "last.pt"
     state = TrainState()
     if resume and last.exists():
+        saved = torch.load(last, map_location="cpu", weights_only=False)
+        old = saved.get("run_config", {})
+        # Epoch limits and patience may change; model/data/optimizer settings may not.
+        changed = [k for k in old if k not in {"epochs", "patience"} and old[k] != run_config.get(k)]
+        if changed:
+            raise ValueError(f"Resume configuration changed: {', '.join(changed)}. Use a new --run-name.")
         state, _ = load_checkpoint(last, model, optimizer, scheduler, scaler, map_location=device)
+        rng = saved.get("rng")
+        if rng:
+            random.setstate(rng["python"])
+            np.random.set_state(rng["numpy"])
+            torch.set_rng_state(rng["torch"].cpu())
+            if torch.cuda.is_available() and rng.get("cuda") is not None:
+                torch.cuda.set_rng_state_all(rng["cuda"])
+        if scheduler and hasattr(scheduler, "T_max"):
+            extended = scheduler.T_max != max(epochs, 1)
+            scheduler.T_max = max(epochs, 1)
+            if extended:
+                # An old schedule may already be at LR=0; an extended run must learn.
+                for group, base_lr in zip(optimizer.param_groups, scheduler.base_lrs):
+                    group["lr"] = scheduler.eta_min + (base_lr - scheduler.eta_min) * (
+                        1 + math.cos(math.pi * state.epoch / scheduler.T_max)) / 2
         print(f"Resumed from {last} (completed epochs: {state.epoch}, best AUC: {state.best_score:.4f})")
+    (run_dir / "config.json").write_text(json.dumps(run_config, indent=2, default=str))
 
     while state.epoch < epochs and state.epochs_without_improvement < patience:
         ep = state.epoch + 1

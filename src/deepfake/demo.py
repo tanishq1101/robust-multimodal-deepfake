@@ -43,7 +43,8 @@ def make_handler(detector: DeepfakeDetector):
         if not video_path:
             raise gr.Error("Please upload a video first.")
         res = detector.analyse(video_path, with_explanation=True, target=target)
-        label = {"FAKE": res["p_fake"], "REAL": 1 - res["p_fake"]}
+        label = ({"INCONCLUSIVE": 1.0} if res["p_fake"] is None else
+                 {"FAKE": res["p_fake"], "REAL": 1 - res["p_fake"]})
         return label, format_details(res), res.get("face_overlays", []), res.get("spectrogram")
     return analyse
 

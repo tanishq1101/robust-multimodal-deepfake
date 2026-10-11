@@ -7,10 +7,10 @@ __pycache__/
 .pytest_cache/
 
 # Data and outputs (live on Google Drive, never in git)
-data/
-checkpoints/
-runs/
-outputs/
+/data/
+/checkpoints/
+/runs/
+/outputs/
 *.mp4
 *.flac
 *.wav

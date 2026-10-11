@@ -33,8 +33,13 @@ def late_combine(pv: torch.Tensor, pa: torch.Tensor, hv: torch.Tensor, ha: torch
     elif rule == "noisy_or":
         p = 1 - (1 - pv0) * (1 - pa0)
     elif rule == "weighted":
+        if not 0 <= weight <= 1:
+            raise ValueError("late fusion weight must be between 0 and 1")
         wv, wa = weight * hv, (1 - weight) * ha
         p = (wv * pv + wa * pa) / (wv + wa).clamp(min=1e-6)
+        # At weights 0/1 the sole available branch must still count.
+        p = torch.where((hv > 0) & (ha == 0), pv, p)
+        p = torch.where((ha > 0) & (hv == 0), pa, p)
     else:
         raise ValueError(f"unknown late fusion rule: {rule}")
     # neither modality present -> undecided
@@ -66,8 +71,22 @@ class MultimodalModel(nn.Module):
         has_video, has_audio = has_video.bool(), has_audio.bool()
         if self.training and self.modality_dropout > 0:
             has_video, has_audio = self._drop_modality(has_video, has_audio)
-        v = self.visual(frames, frame_mask)
-        a = self.audio(mel)
+        # Missing inputs must not enter BatchNorm statistics or waste a CNN pass.
+        v = {"logit": frames.new_zeros(len(frames)),
+             "embedding": frames.new_zeros(len(frames), self.visual.embed_dim),
+             "frame_logits": frames.new_zeros(frames.shape[:2])}
+        a = {"logit": mel.new_zeros(len(mel)),
+             "embedding": mel.new_zeros(len(mel), self.audio.embed_dim)}
+        if has_video.any():
+            encoded = self.visual(frames[has_video], frame_mask[has_video])
+            for key, value in encoded.items():
+                v[key] = value.new_zeros(v[key].shape).index_copy(
+                    0, has_video.nonzero().flatten(), value)
+        if has_audio.any():
+            encoded = self.audio(mel[has_audio])
+            for key, value in encoded.items():
+                a[key] = value.new_zeros(a[key].shape).index_copy(
+                    0, has_audio.nonzero().flatten(), value)
         hv, ha = has_video.float(), has_audio.float()
         if self.fusion == "late":
             p = late_combine(torch.sigmoid(v["logit"]), torch.sigmoid(a["logit"]), hv, ha,

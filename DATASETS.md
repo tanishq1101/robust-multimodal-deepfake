@@ -64,8 +64,15 @@ Override the locations with the `DEEPFAKE_RAW_ROOT` / `DEEPFAKE_DATA_ROOT` envir
 
 ## Leakage-free splits
 
-Splits are made by **identity** (FakeAVCeleb person id, DFDC source video, ASVspoof speaker), never by file.
-That way the same face or voice never appears in both training and testing.
+Splits use FakeAVCeleb person IDs, DFDC source-video groups, and ASVspoof's official speaker
+protocols. The splitter keeps each group in one active split, and training rejects duplicate
+samples or groups/media paths that cross splits. DFDC source-video grouping does **not** prove
+that every person's identity is disjoint: different source videos may show the same person.
+
+The Celeb-DF official test list is preserved exactly. Other videos with those test identities
+receive `split=excluded` so they cannot enter training or validation. No files are deleted.
+Check the resulting class counts before training; the training commands require both classes
+in train and validation.
 
 ## Citations
 

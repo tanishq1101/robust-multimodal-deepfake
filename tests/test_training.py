@@ -41,11 +41,14 @@ def test_train_resume_evaluate(tiny_index, tmp_path, monkeypatch):
     metrics = json.loads((run_dir / "test" / "metrics.json").read_text())
     assert metrics["n"] == 4 and 0.0 <= metrics["auc"] <= 1.0
     assert len(pd.read_csv(run_dir / "test" / "predictions.csv")) == 4
+    before_resume = torch.load(run_dir / "last.pt", weights_only=False)["model"]["head.1.weight"]
 
     # Resume: asking for 3 epochs continues from epoch 2 instead of starting over.
     _train(tiny_index, epochs=3)
     hist = pd.read_csv(run_dir / "history.csv")
     assert list(hist.epoch) == [1, 2, 3]
+    after_resume = torch.load(run_dir / "last.pt", weights_only=False)["model"]["head.1.weight"]
+    assert not torch.equal(before_resume, after_resume)
 
     model = TASKS["visual"].build_model(json.loads((run_dir / "config.json").read_text()), False)
     state, cfg = load_checkpoint(run_dir / "last.pt", model)

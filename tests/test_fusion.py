@@ -50,6 +50,10 @@ def test_intermediate_fusion(branches, tiny_index, monkeypatch):
     aud = torch.load(a_ckpt, weights_only=False)["model"]
     assert torch.equal(fused["visual.head.1.weight"], vis["head.1.weight"])
     assert torch.equal(fused["audio.head.1.weight"], aud["head.1.weight"])
+    for key, value in vis.items():
+        assert torch.equal(fused[f"visual.{key}"], value), key
+    for key, value in aud.items():
+        assert torch.equal(fused[f"audio.{key}"], value), key
 
 
 def test_late_fusion_and_comparison(branches, tiny_index, monkeypatch):

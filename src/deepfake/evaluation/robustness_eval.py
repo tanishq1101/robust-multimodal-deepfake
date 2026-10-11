@@ -68,6 +68,7 @@ def evaluate_model(name: str, checkpoint: Path, index: Path, split: str, cfg: di
     device = torch.device(device) if isinstance(device, str) else (device or get_device())
     ckpt = torch.load(checkpoint, map_location="cpu", weights_only=False)
     rc = ckpt["run_config"]
+    cfg = {**cfg, **rc.get("preprocessing", {})}
     task = TASKS[rc["task"]]
     model = task.build_model(rc, False)
     model.load_state_dict(ckpt["model"])

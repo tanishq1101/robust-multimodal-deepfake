@@ -76,7 +76,11 @@ class DeepfakeDetector:
         self.device = torch.device(device) if device else get_device()
         self.checkpoint = Path(checkpoint)
         self.model, self.run_config = load_model(self.checkpoint, self.device)
+        if "preprocessing" in self.run_config:
+            self.cfg = {**self.cfg, **self.run_config["preprocessing"]}
         self.task = self.run_config["task"]
+        if not 0 <= threshold <= 1:
+            raise ValueError("threshold must be between 0 and 1")
         self.threshold = threshold
         self.face_detector = FaceDetector(self.cfg["video"]["detector_score"]) if use_face_detector else None
 
@@ -84,6 +88,8 @@ class DeepfakeDetector:
     def preprocess(self, path: str | Path) -> tuple[dict, dict]:
         """Returns (batch of size 1 on the model's device, info dict)."""
         path = Path(path)
+        if not path.is_file():
+            raise FileNotFoundError(path)
         v, a = self.cfg["video"], self.cfg["audio"]
         T, S = v["num_frames"], v["face_size"]
         mel_frames = int(a["window_seconds"] * a["sample_rate"] / a["hop_length"]) + 1
@@ -143,10 +149,20 @@ class DeepfakeDetector:
         warnings = []
         if self.task in ("visual", "fusion") and not info["has_face"]:
             warnings.append("No face detected: the visual evidence is unreliable." if self.task == "visual"
-                            else "No face detected: decision based on audio only.")
+                            else ("No face detected: decision based on audio only." if info["has_audio"]
+                                  else "No face detected."))
         if self.task in ("audio", "fusion") and not info["has_audio"]:
-            warnings.append("No audio track: decision based on the face only." if self.task == "fusion"
+            warnings.append(("No audio track: decision based on the face only." if info["has_face"]
+                             else "No audio track.") if self.task == "fusion"
                             else "No audio track: the audio model cannot judge this file.")
+        usable = ((self.task in ("visual", "fusion") and info["has_face"])
+                  or (self.task in ("audio", "fusion") and info["has_audio"]))
+        if not usable:
+            keys = ["overall", "visual", "audio"] if self.task == "fusion" else [self.task]
+            warnings.append("Insufficient evidence: this model cannot judge the file.")
+            return {"p_fake": None, "verdict": "INCONCLUSIVE", "threshold": self.threshold,
+                    "task": self.task, "checkpoint": str(self.checkpoint),
+                    "scores": dict.fromkeys(keys), "info": info, "warnings": warnings}
         scores = self._scores(batch)
         p = scores.get("overall", scores.get("visual", scores.get("audio")))
         result = {"p_fake": p, "verdict": "FAKE" if p >= self.threshold else "REAL",
@@ -154,7 +170,8 @@ class DeepfakeDetector:
                   "scores": scores, "info": info, "warnings": warnings}
 
         if with_explanation and (info["has_face"] or info["has_audio"]):
-            exp = explain(self.model, self.task, batch, target=target)
+            explained_target = ("fake" if p >= self.threshold else "real") if target == "predicted" else target
+            exp = explain(self.model, self.task, batch, target=explained_target)
             result["explained_class"] = exp["target"]
             if exp["visual_cam"] is not None:
                 imgs = denormalise(batch["frames"][0])

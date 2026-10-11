@@ -87,6 +87,9 @@ def build_visual_dataset(index_csv, split: str, cfg: dict, train: bool, run_conf
     # The visual branch learns "is the FACE fake": e.g. FakeAVCeleb RealVideo-FakeAudio is
     # a real face (video_label 0). Rows without a video label are dropped.
     ds.df = ds.df[ds.df["video_label"].astype(int) >= 0].reset_index(drop=True)
+    if "n_detected" in ds.df:
+        present = (ds.df.n_detected > 0) | ~ds.df.get("face_detection", np.ones(len(ds.df), dtype=bool)).astype(bool)
+        ds.df = ds.df[present].reset_index(drop=True)
     return ds
 
 
@@ -139,6 +142,10 @@ def build_fusion_dataset(index_csv, split: str, cfg: dict, train: bool, run_conf
                            frames_per_item=run_config.get("frames_per_video"),
                            **robust_transforms(train, run_config))
     ds.df = ds.df[ds.df["label"].astype(int) >= 0].reset_index(drop=True)
+    present = ds.df.faces_path != ""
+    if "n_detected" in ds.df:
+        present &= (ds.df.n_detected > 0) | ~ds.df.get("face_detection", np.ones(len(ds.df), dtype=bool)).astype(bool)
+    ds.df = ds.df[present | (ds.df.mel_path != "")].reset_index(drop=True)
     return ds
 
 

@@ -92,8 +92,14 @@ def run(df: pd.DataFrame, media_root: Path, out_root: Path, cfg: dict, workers: 
     relative to out_root (where index.csv is saved), so the index works from both Mac and Colab.
     Re-running on an older output folder only adds what is missing (e.g. the wav/ files)."""
     jobs = []
+    if df.empty:
+        raise ValueError("No samples to preprocess")
+    if df.sample_id.duplicated().any():
+        raise ValueError("Duplicate sample_id would overwrite processed files")
     for r in df.itertuples():
         stem = str(r.sample_id)
+        if not stem or Path(stem).is_absolute() or ".." in Path(stem).parts:
+            raise ValueError(f"Unsafe sample_id: {stem!r}")
         jobs.append((stem, str(media_root / r.path), r.modality,
                      str(out_root / "faces" / f"{stem}.npz"), str(out_root / "mel" / f"{stem}.npy"),
                      str(out_root / "wav" / f"{stem}.flac")))
@@ -105,7 +111,8 @@ def run(df: pd.DataFrame, media_root: Path, out_root: Path, cfg: dict, workers: 
         results = [process_one(j) for j in tqdm(jobs)]
     res = pd.DataFrame(results)
     out = df.merge(res, on="sample_id")
-    has_v = out.modality.isin(["av", "video"])
+    out["face_detection"] = use_detector
+    has_v = out.modality.isin(["av", "video"]) & (out.n_frames > 0)
     has_a = out.modality.isin(["av", "audio"]) & (out.audio_seconds > 0)
     out["faces_path"] = np.where(has_v, [f"faces/{s}.npz" for s in out.sample_id], "")
     out["mel_path"] = np.where(has_a, [f"mel/{s}.npy" for s in out.sample_id], "")

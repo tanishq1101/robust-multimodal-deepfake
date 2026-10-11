@@ -34,7 +34,7 @@ from deepfake.evaluation.evaluate import evaluate_checkpoint
 from deepfake.evaluation.metrics import compute_metrics
 from deepfake.models.fusion import LATE_RULES, late_combine
 from deepfake.training.engine import TrainState, get_device, save_checkpoint, seed_everything, to_device
-from deepfake.training.runner import build_parser, run
+from deepfake.training.runner import build_parser, run, validate_index, validate_labels
 from deepfake.training.tasks import FUSION_INPUTS, TASKS
 
 
@@ -99,9 +99,11 @@ def run_late(args, cfg, run_config_extra, visual_state, audio_state) -> Path:
     seed_everything(args.seed)
     task = TASKS["fusion"]
     index = Path(args.index) if args.index else get_path(cfg, "processed", args.dataset, "index.csv")
+    validate_index(index)
     run_dir = get_path(cfg, "checkpoints", args.run_name or f"fusion_late_{args.dataset}")
     run_config = {"task": "fusion", "index": str(index), "dropout": args.dropout, "augment": False,
-                  "seed": args.seed, **run_config_extra}
+                  "seed": args.seed, "preprocessing": {k: dict(cfg[k]) for k in ("video", "audio")},
+                  **run_config_extra}
 
     device = get_device(args.device)
     model = task.build_model(run_config, False)
@@ -110,6 +112,7 @@ def run_late(args, cfg, run_config_extra, visual_state, audio_state) -> Path:
     val_ds = task.build_dataset(index, "val", cfg, False, run_config)
     if len(val_ds) == 0:
         raise SystemExit(f"Empty val split in {index}")
+    validate_labels(val_ds, "label", "val")
     probs = branch_probabilities(model, DataLoader(val_ds, args.batch_size, num_workers=args.workers), device)
 
     table = calibrate_late(probs)

@@ -91,13 +91,16 @@ class MultimodalDataset(Dataset):
     def labels(self) -> np.ndarray:
         return self.df["label"].to_numpy()
 
-    def _video(self, rel: str) -> tuple[torch.Tensor, torch.Tensor, bool]:
+    def _video(self, rel: str, face_detection: bool = True) -> tuple[torch.Tensor, torch.Tensor, bool]:
         T, S = self.num_frames, self.face_size
         frames = torch.zeros(T, 3, S, S)
         mask = torch.zeros(T, dtype=torch.bool)
         if not (self.use_video and rel):
             return frames, mask, False
-        faces, _ = load_faces(self.root / rel)
+        faces, detected = load_faces(self.root / rel)
+        # Match raw-file inference: fallback crops alone are not face evidence.
+        if face_detection and not detected.any():
+            return frames, mask, False
         if len(faces) > T:
             if self.num_frames < self.stored_frames:  # training subsample, keep temporal order
                 faces = faces[np.sort(self._rng().choice(len(faces), T, replace=False))]
@@ -143,7 +146,7 @@ class MultimodalDataset(Dataset):
 
     def __getitem__(self, i: int) -> dict:
         r = self.df.iloc[i]
-        frames, mask, has_v = self._video(r["faces_path"])
+        frames, mask, has_v = self._video(r["faces_path"], bool(r.get("face_detection", True)))
         mel, has_a = self._audio(r["mel_path"], r.get("wav_path", ""))
         return {
             "frames": frames, "frame_mask": mask, "mel": mel,

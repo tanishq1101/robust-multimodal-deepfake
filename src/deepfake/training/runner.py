@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 
 import torch
+import pandas as pd
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -59,12 +60,38 @@ def class_balance_weight(labels) -> torch.Tensor:
     return torch.tensor(n_real / n_fake if n_fake and n_real else 1.0)
 
 
+def validate_index(index: Path) -> None:
+    """Reject split leakage before any model is built or training output is written."""
+    df = pd.read_csv(index, keep_default_na=False)
+    if not df["split"].isin(["train", "val", "test", "excluded"]).all():
+        raise ValueError("Index has missing or invalid splits; assign train/val/test first")
+    if df["sample_id"].duplicated().any():
+        raise ValueError("Duplicate sample_id in processed index")
+    df = df[df["split"] != "excluded"]
+    for key in ("group", "path"):
+        if key in df:
+            if key == "group" and (df[key] == "").any():
+                raise ValueError("Every training/evaluation row needs a non-empty split group")
+            known = df[df[key] != ""]
+            if (known.groupby(key)["split"].nunique() > 1).any():
+                raise ValueError(f"Split leakage: {key} appears in more than one split")
+
+
+def validate_labels(ds, key: str, split: str) -> None:
+    labels = ds.df[key].to_numpy()
+    if len(ds) == 0 or not set(labels) <= {0, 1}:
+        raise ValueError(f"{split} requires non-empty binary {key} labels")
+    if set(labels) != {0, 1}:
+        raise ValueError(f"{split} must contain both real and fake {key} labels")
+
+
 def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict | None = None,
         init_fn=None) -> Path:
     """Train one task. init_fn(model) can load pre-trained weights (skipped when resuming)."""
     seed_everything(args.seed)
     task = TASKS[task_name]
     index = Path(args.index) if args.index else get_path(cfg, "processed", args.dataset, "index.csv")
+    validate_index(index)
     run_name = args.run_name or f"{task_name}_{args.dataset}"
     run_dir = get_path(cfg, "checkpoints", run_name)
     run_config = {
@@ -74,6 +101,7 @@ def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict 
         "init_from": args.init_from, "epochs": args.epochs,
         "batch_size": args.batch_size, "lr": args.lr, "weight_decay": args.weight_decay,
         "freeze_epochs": args.freeze_epochs, "patience": args.patience, "seed": args.seed,
+        "preprocessing": {k: dict(cfg[k]) for k in ("video", "audio")},
         **(extra_config or {}),
     }
 
@@ -83,6 +111,8 @@ def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict 
         raise SystemExit(f"Empty train ({len(train_ds)}) or val ({len(val_ds)}) split for "
                          f"task '{task_name}' in {index}")
     labels = train_ds.df[task.label_key].to_numpy().astype(int)
+    validate_labels(train_ds, task.label_key, "train")
+    validate_labels(val_ds, task.label_key, "val")
     print(f"[{task_name}] train: {len(train_ds)} ({int((labels == 1).sum())} fake) | val: {len(val_ds)}")
 
     device = get_device(args.device)
@@ -90,11 +120,13 @@ def run(task_name: str, args: argparse.Namespace, cfg: dict, extra_config: dict 
     loader_kw = dict(num_workers=args.workers, pin_memory=device.type == "cuda",
                      persistent_workers=args.workers > 0)
     train_loader = DataLoader(train_ds, args.batch_size, shuffle=True,
-                              drop_last=len(train_ds) > args.batch_size, **loader_kw)
+                              drop_last=False, **loader_kw)
     val_loader = DataLoader(val_ds, args.batch_size, shuffle=False, **loader_kw)
 
-    model = task.build_model(run_config, not args.no_pretrained)
     resuming = (run_dir / "last.pt").exists() and not args.no_resume
+    branches_loaded = run_config.get("visual_ckpt") and run_config.get("audio_ckpt")
+    model = task.build_model(run_config, bool(not args.no_pretrained and not resuming
+                                            and not args.init_from and not branches_loaded))
     if not resuming:
         if args.init_from:
             ckpt = torch.load(args.init_from, map_location="cpu", weights_only=False)

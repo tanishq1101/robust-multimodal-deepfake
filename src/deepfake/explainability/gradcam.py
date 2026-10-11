@@ -97,6 +97,11 @@ def explain(model: nn.Module, task: str, batch: dict, target: str = "predicted")
     """
     if batch["frames"].shape[0] != 1:
         raise ValueError("explain() works on a single sample (batch size 1)")
+    if target not in {"predicted", "fake", "real"}:
+        raise ValueError(f"Unknown explanation target: {target}")
+    # Frozen parameters still need a differentiable input for activation gradients.
+    batch = {k: (v.detach().requires_grad_(True) if k in {"frames", "mel"} else v)
+             for k, v in batch.items()}
     model.eval()
     layers = cam_layers(model, task)
     with torch.enable_grad(), _capture(layers) as acts:
@@ -110,7 +115,11 @@ def explain(model: nn.Module, task: str, batch: dict, target: str = "predicted")
     out = {"prob": prob, "target": explained, "visual_cam": None, "audio_cam": None}
     if "visual" in acts and bool(batch["has_video"].item() if task == "fusion" else True):
         H, W = batch["frames"].shape[-2:]
-        cam = _cam(acts["visual"])[None]                       # [1, T, h, w]
+        valid_cam = _cam(acts["visual"])
+        mask = batch["frame_mask"][0].bool()
+        cam = valid_cam.new_zeros(len(mask), *valid_cam.shape[-2:])
+        cam[mask] = valid_cam
+        cam = cam[None]                                       # [1, T, h, w]
         cam = F.interpolate(cam, size=(H, W), mode="bilinear", align_corners=False)[0]
         cam = cam * batch["frame_mask"][0, :, None, None].float()
         out["visual_cam"] = _normalise(cam.detach().cpu().numpy())

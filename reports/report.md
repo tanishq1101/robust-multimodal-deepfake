@@ -19,8 +19,9 @@ project builds an audio-visual deepfake detector with three properties:
 - **Explainable:** Grad-CAM shows which face regions and which time–frequency regions drove each
   decision.
 
-The system is trained on FakeAVCeleb, whose labels separate fake video from fake audio. The voice
-branch is pre-trained on ASVspoof 2019 LA. A Gradio demo analyses uploaded videos.
+The planned training uses FakeAVCeleb, whose labels separate fake video from fake audio, with
+ASVspoof 2019 LA pre-training for the voice branch. These real-dataset runs have not yet been
+verified. A Gradio demo can analyse uploaded videos after a trained checkpoint is supplied.
 _[Add the headline results from `results.md`: fusion vs. single-branch AUC, robustness drop, Celeb-DF transfer.]_
 
 ## 1. Introduction
@@ -100,8 +101,10 @@ social platforms, and it should give evidence a human can check.
 | ASVspoof 2019 LA | audio pre-training; per-attack evaluation | bona fide / spoof, attack system |
 | Celeb-DF v2 | cross-dataset test of the visual branch | real / synthesis (official test list) |
 
-- **Splits:** identity-wise, 70/15/15. The same person (FakeAVCeleb id), source video (DFDC) or
-  speaker (ASVspoof) never appears in two splits. Official splits are kept where they exist.
+- **Splits:** grouped 70/15/15 where no official protocol exists. FakeAVCeleb uses person IDs,
+  DFDC uses source-video groups, and ASVspoof keeps its official protocol. Source-video grouping
+  alone does not guarantee disjoint person identities. The exact Celeb-DF official test list is
+  kept; other videos sharing those test identities are excluded from train/validation.
 - **Balancing:** FakeAVCeleb contains 500 real and 19,500 fake videos, so a subset balanced per
   split and category is used (`--per-class`). Training additionally weights the loss by the
   real/fake ratio.
@@ -173,7 +176,8 @@ Seven degradations, each at three severities:
   region that can change the score.
 
 ### 4.7 Implementation
-- PyTorch with timm and torchvision, trained on a Google Colab T4 with mixed precision.
+- PyTorch with timm and torchvision, configured for Google Colab T4 training with mixed
+  precision on CUDA. Real-data GPU training remains unverified.
 - Checkpoints are saved every epoch with resume support, and early stopping uses validation AUC.
 - The code has a pytest suite; all numbers are produced by the scripts and notebooks listed in
   the README.

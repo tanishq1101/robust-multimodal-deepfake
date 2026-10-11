@@ -352,6 +352,9 @@ VISUAL = CKPT / "visual_fakeavceleb" / "best.pt"
 AUDIO = CKPT / "audio_fakeavceleb" / "best.pt"
 for p in (VISUAL, AUDIO):
     print(("OK      " if p.exists() else "MISSING ") + str(p))
+missing = [str(p) for p in (VISUAL, AUDIO) if not p.exists()]
+if missing:
+    raise FileNotFoundError("Train the PyTorch branches in notebooks 03 and 04 first: " + ", ".join(missing))
 """),
     md("## Late fusion (calibration only, takes ~1 min)"),
     code("""
@@ -469,9 +472,12 @@ from IPython.display import Image, Markdown, display
 DATASET = "fakeavceleb"
 CKPT = Path(cfg["paths"]["checkpoints"])
 # first existing checkpoint in this order
+RUN = None
 for run in [f"fusion_intermediate_{DATASET}_robust", f"fusion_intermediate_{DATASET}", f"visual_{DATASET}", "visual_dfdc", "audio_asvspoof"]:
     if (CKPT / run / "best.pt").exists():
         RUN = run; break
+if RUN is None:
+    raise FileNotFoundError("No trained PyTorch checkpoint found. Run notebooks 03–05 first.")
 print("explaining:", RUN)
 OUT = Path(cfg["paths"]["outputs"]) / f"gallery_{RUN}"
 """),
