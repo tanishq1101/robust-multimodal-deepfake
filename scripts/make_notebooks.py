@@ -326,8 +326,67 @@ if os.path.exists(f"{cfg['paths']['processed']}/fakeavceleb/index.csv"):
 """),
 ], gpu=True)
 
+nb05 = notebook([
+    md("""
+# 05 · Phase 4: multimodal fusion
+Combines the best visual (Phase 2) and audio (Phase 3) models, trained on FakeAVCeleb, and
+compares everything on the **same test set** with the **overall label**: fake if the face OR the voice is fake.
+
+| Model | What it is |
+|---|---|
+| visual_only | Phase 2 face model alone |
+| audio_only | Phase 3 voice model alone |
+| late | no training: best of weighted-average / max / noisy-OR, tuned on validation |
+| intermediate | embeddings of both branches → MLP; branches frozen first, then fine-tuned; modality dropout 0.2 |
+
+**Needs:** `checkpoints/visual_fakeavceleb/best.pt` (notebook 03 with `DATASET="fakeavceleb"`) and
+`checkpoints/audio_fakeavceleb/best.pt` (notebook 04, step 2). T4 GPU runtime.
+"""),
+    code(SETUP),
+    code("""
+import json, pandas as pd
+from pathlib import Path
+from IPython.display import Image, Markdown, display
+CKPT = Path(cfg["paths"]["checkpoints"])
+VISUAL = CKPT / "visual_fakeavceleb" / "best.pt"
+AUDIO = CKPT / "audio_fakeavceleb" / "best.pt"
+for p in (VISUAL, AUDIO):
+    print(("OK      " if p.exists() else "MISSING ") + str(p))
+"""),
+    md("## Late fusion (calibration only, takes ~1 min)"),
+    code("""
+!python -m deepfake.training.train_fusion --fusion late --visual-ckpt {VISUAL} --audio-ckpt {AUDIO} --workers 2
+display(pd.read_csv(CKPT / "fusion_late_fakeavceleb" / "calibration.csv").head(10).round(4))
+"""),
+    md("## Intermediate fusion (training)"),
+    code("""
+!python -m deepfake.training.train_fusion --fusion intermediate --visual-ckpt {VISUAL} --audio-ckpt {AUDIO} --epochs 10 --batch-size 8 --workers 2
+display(Image(str(CKPT / "fusion_intermediate_fakeavceleb" / "curves.png")))
+"""),
+    md("## Comparison table: the core result of the project"),
+    code("""
+models = {
+    "visual_only": VISUAL,
+    "audio_only": AUDIO,
+    "late": CKPT / "fusion_late_fakeavceleb" / "best.pt",
+    "intermediate": CKPT / "fusion_intermediate_fakeavceleb" / "best.pt",
+}
+args = " ".join(f"--model {k}={v}" for k, v in models.items() if Path(v).exists())
+!python -m deepfake.evaluation.compare --dataset fakeavceleb {args} --workers 2
+OUT = Path(cfg["paths"]["outputs"]) / "compare_fakeavceleb_test"
+display(Markdown((OUT / "comparison.md").read_text()))
+display(Image(str(OUT / "comparison.png")))
+"""),
+    md("""
+**How to read it:** visual_only should fail on *RealVideo-FakeAudio* and audio_only on
+*FakeVideo-RealAudio*. Fusion should handle all four categories. Copy `comparison.md` into
+`reports/results.md`.
+"""),
+], gpu=True)
+
 OUT.mkdir(parents=True, exist_ok=True)
 for name, nb in [("00_colab_setup", nb00), ("01_download_datasets", nb01), ("02_preprocess", nb02),
-                 ("03_train_visual", nb03), ("04_train_audio", nb04)]:
+                 ("03_train_visual", nb03), ("04_train_audio", nb04),
+                 ("05_train_fusion", nb05)]:
     (OUT / f"{name}.ipynb").write_text(json.dumps(nb, indent=1) + "\n")
     print("wrote", name)

@@ -3,44 +3,17 @@
 import json
 import os
 import shutil
-import subprocess
 
 import numpy as np
 import pandas as pd
-import pytest
 import torch
 
-from deepfake.preprocessing import run as prep
 from deepfake.evaluation.evaluate import per_category
 from deepfake.training import train_audio, train_visual
 from deepfake.training.engine import load_checkpoint
 from deepfake.training.tasks import TASKS, SpecAugment
 
 DEVICE = os.environ.get("DEEPFAKE_TEST_DEVICE", "cpu")
-
-
-@pytest.fixture(scope="module")
-def tiny_index(tmp_path_factory):
-    """8 synthetic clips, split 4/2/2.
-    real: test-pattern video + 440 Hz tone · fake: colour bars + pink noise."""
-    if shutil.which("ffmpeg") is None:
-        pytest.skip("ffmpeg not installed")
-    vids = tmp_path_factory.mktemp("tiny_videos")
-    for i in range(8):
-        video = "testsrc" if i % 2 == 0 else "smptebars"
-        audio = "sine=frequency=440:duration=1" if i % 2 == 0 else "anoisesrc=d=1:c=pink"
-        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"{video}=duration=1:size=160x120:rate=10",
-                        "-f", "lavfi", "-i", audio, "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
-                        str(vids / f"v{i}.mp4")], check=True)
-    out = tmp_path_factory.mktemp("tiny_processed")
-    prep.main(["--input", str(vids), "--out", str(out), "--workers", "1", "--no-detector"])
-    idx = pd.read_csv(out / "index.csv", keep_default_na=False)
-    n = idx.sample_id.str[1:].astype(int)
-    idx["label"] = idx["video_label"] = idx["audio_label"] = n % 2
-    idx["category"] = ["FakeVideo-FakeAudio" if k % 2 else "RealVideo-RealAudio" for k in n]
-    idx["split"] = ["train" if k < 4 else "val" if k < 6 else "test" for k in n]
-    idx.to_csv(out / "index.csv", index=False)
-    return out / "index.csv"
 
 
 COMMON = ["--batch-size", "2", "--no-pretrained", "--device", DEVICE, "--workers", "0",
@@ -66,8 +39,8 @@ def test_train_resume_evaluate(tiny_index, tmp_path, monkeypatch):
     assert len(pd.read_csv(run_dir / "history.csv")) == 2
 
     metrics = json.loads((run_dir / "test" / "metrics.json").read_text())
-    assert metrics["n"] == 2 and 0.0 <= metrics["auc"] <= 1.0
-    assert len(pd.read_csv(run_dir / "test" / "predictions.csv")) == 2
+    assert metrics["n"] == 4 and 0.0 <= metrics["auc"] <= 1.0
+    assert len(pd.read_csv(run_dir / "test" / "predictions.csv")) == 4
 
     # Resume: asking for 3 epochs continues from epoch 2 instead of starting over.
     _train(tiny_index, epochs=3)
@@ -95,7 +68,7 @@ def test_audio_train_and_init_from(tiny_index, tmp_path, monkeypatch):
         assert (run_dir / f).exists(), f
     assert json.loads((run_dir / "config.json").read_text())["task"] == "audio"
     cats = pd.read_csv(run_dir / "test" / "per_category.csv")
-    assert set(cats.category) == {"RealVideo-RealAudio", "FakeVideo-FakeAudio"}
+    assert len(cats) == 4  # all FakeAVCeleb-style categories
 
     # Fine-tune from the pre-trained checkpoint; with lr=0 the head must keep its weights.
     ft_dir = _train_audio(tiny_index, "audio_ft", epochs=1,
@@ -110,11 +83,10 @@ def test_audio_dataset_drops_unlabelled(tiny_index, tmp_path, cfg):
     idx.loc[idx.split == "train", "audio_label"] = -1   # e.g. DFDC has no audio labels
     path = tmp_path / "index.csv"
     idx.to_csv(path, index=False)
-    import shutil as sh
     for d in ("faces", "mel"):
-        sh.copytree(tiny_index.parent / d, tmp_path / d)
+        shutil.copytree(tiny_index.parent / d, tmp_path / d)
     assert len(TASKS["audio"].build_dataset(path, "train", cfg, True, {})) == 0
-    assert len(TASKS["audio"].build_dataset(path, "val", cfg, False, {})) == 2
+    assert len(TASKS["audio"].build_dataset(path, "val", cfg, False, {})) == 4
 
 
 def test_spec_augment_masks():

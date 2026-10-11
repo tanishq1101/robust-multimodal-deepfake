@@ -1,8 +1,16 @@
 """Fusion of the visual and audio branches.
 
-LateFusion          weighted average of the two branch probabilities (no extra training).
-IntermediateFusion  concatenates branch embeddings -> MLP. Missing modalities (no face /
-                    no audio track) are zeroed and flagged, so the model learns to cope.
+late          combine the two branch probabilities with a fixed rule (no extra training):
+                weighted  w * p_video + (1 - w) * p_audio
+                max       max(p_video, p_audio)
+                noisy_or  1 - (1 - p_video)(1 - p_audio)
+              The overall label is "fake if the face OR the voice is fake", so max / noisy-OR
+              often beat a plain average; the rule and weight are tuned on validation.
+intermediate  concatenates branch embeddings + modality-present flags -> MLP.
+
+Missing modalities (no face / no audio track) are excluded from late fusion and zeroed +
+flagged in intermediate fusion. With `modality_dropout` > 0 the model randomly hides one
+modality during training so it learns to cope when one is missing.
 """
 
 from __future__ import annotations
@@ -13,27 +21,57 @@ from torch import nn
 from deepfake.models.audio import AudioModel
 from deepfake.models.visual import VisualModel
 
+LATE_RULES = ("weighted", "max", "noisy_or")
+
+
+def late_combine(pv: torch.Tensor, pa: torch.Tensor, hv: torch.Tensor, ha: torch.Tensor,
+                 rule: str = "weighted", weight: float = 0.5) -> torch.Tensor:
+    """Combine branch probabilities; hv/ha (0/1 floats) mark which modalities are present."""
+    pv0, pa0 = pv * hv, pa * ha  # an absent modality contributes "real" (0) to max / noisy-OR
+    if rule == "max":
+        p = torch.maximum(pv0, pa0)
+    elif rule == "noisy_or":
+        p = 1 - (1 - pv0) * (1 - pa0)
+    elif rule == "weighted":
+        wv, wa = weight * hv, (1 - weight) * ha
+        p = (wv * pv + wa * pa) / (wv + wa).clamp(min=1e-6)
+    else:
+        raise ValueError(f"unknown late fusion rule: {rule}")
+    # neither modality present -> undecided
+    return torch.where((hv + ha) > 0, p, torch.full_like(p, 0.5))
+
 
 class MultimodalModel(nn.Module):
     def __init__(self, visual: VisualModel, audio: AudioModel, fusion: str = "intermediate",
-                 dropout: float = 0.3, late_weight: float = 0.5):
+                 dropout: float = 0.3, late_weight: float = 0.5, late_rule: str = "weighted",
+                 modality_dropout: float = 0.0):
         super().__init__()
         self.visual, self.audio, self.fusion = visual, audio, fusion
-        self.late_weight = late_weight  # weight of the visual branch in late fusion
+        self.late_weight = late_weight  # weight of the visual branch for the "weighted" rule
+        self.late_rule = late_rule
+        self.modality_dropout = modality_dropout
         d = visual.embed_dim + audio.embed_dim + 2  # +2 modality-present flags
         self.mlp = nn.Sequential(
             nn.Linear(d, 256), nn.ReLU(), nn.Dropout(dropout), nn.Linear(256, 1)
         )
 
+    def _drop_modality(self, has_video: torch.Tensor, has_audio: torch.Tensor):
+        """Training only: for a fraction of samples that have both, hide one at random."""
+        both = has_video & has_audio
+        drop = (torch.rand(both.shape, device=both.device) < self.modality_dropout) & both
+        hide_video = torch.rand(both.shape, device=both.device) < 0.5
+        return has_video & ~(drop & hide_video), has_audio & ~(drop & ~hide_video)
+
     def forward(self, frames, frame_mask, mel, has_video, has_audio) -> dict:
+        has_video, has_audio = has_video.bool(), has_audio.bool()
+        if self.training and self.modality_dropout > 0:
+            has_video, has_audio = self._drop_modality(has_video, has_audio)
         v = self.visual(frames, frame_mask)
         a = self.audio(mel)
         hv, ha = has_video.float(), has_audio.float()
         if self.fusion == "late":
-            pv, pa = torch.sigmoid(v["logit"]), torch.sigmoid(a["logit"])
-            wv = self.late_weight * hv
-            wa = (1 - self.late_weight) * ha
-            p = (wv * pv + wa * pa) / (wv + wa).clamp(min=1e-6)
+            p = late_combine(torch.sigmoid(v["logit"]), torch.sigmoid(a["logit"]), hv, ha,
+                             self.late_rule, self.late_weight)
             logit = torch.logit(p.clamp(1e-6, 1 - 1e-6))
         else:
             z = torch.cat([v["embedding"] * hv[:, None], a["embedding"] * ha[:, None],

@@ -69,7 +69,10 @@ def per_category(pred: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
 
 def evaluate_checkpoint(checkpoint: str | Path, index: str | Path, split: str, cfg: dict,
                         out_dir: str | Path, device: torch.device | str | None = None,
-                        workers: int = 0, batch_size: int = 8) -> dict | None:
+                        workers: int = 0, batch_size: int = 8, label_key: str | None = None,
+                        dataset_task: str | None = None) -> dict | None:
+    """label_key / dataset_task override the checkpoint's own task, e.g. to score a
+    visual-only model against the overall label on the full multimodal test set."""
     from deepfake.training.engine import get_device, predict
     from deepfake.training.tasks import TASKS
 
@@ -79,7 +82,8 @@ def evaluate_checkpoint(checkpoint: str | Path, index: str | Path, split: str, c
     run_config = ckpt["run_config"]
     task = TASKS[run_config["task"]]
 
-    ds = task.build_dataset(index, split, cfg, False, run_config)
+    label_key = label_key or task.label_key
+    ds = TASKS[dataset_task or run_config["task"]].build_dataset(index, split, cfg, False, run_config)
     if len(ds) == 0:
         print(f"No samples in split '{split}' of {index}; skipping evaluation.")
         return None
@@ -88,10 +92,10 @@ def evaluate_checkpoint(checkpoint: str | Path, index: str | Path, split: str, c
     model.to(device)
 
     loader = DataLoader(ds, batch_size, shuffle=False, num_workers=workers)
-    pred = predict(model, loader, task.forward, device, label_key=task.label_key,
+    pred = predict(model, loader, task.forward, device, label_key=label_key,
                    use_amp=device.type == "cuda", desc=f"eval {split}")
     metrics = compute_metrics(pred["labels"], pred["scores"])
-    metrics.update(split=split, index=str(index), checkpoint=str(checkpoint),
+    metrics.update(split=split, index=str(index), checkpoint=str(checkpoint), label_key=label_key,
                    best_epoch=ckpt["state"]["best_epoch"])
     if metrics["eer_threshold"] == metrics["eer_threshold"]:  # also report at the EER threshold
         at_eer = compute_metrics(pred["labels"], pred["scores"], threshold=metrics["eer_threshold"])

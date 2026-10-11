@@ -2,7 +2,7 @@
 
   visual  (Phase 2)  EfficientNet on face crops        label: video_label
   audio   (Phase 3)  ResNet-18 on log-mel spectrograms label: audio_label
-  fusion  (Phase 4)  added later
+  fusion  (Phase 4)  visual + audio branches + fusion   label: label (fake if either is fake)
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from deepfake.datasets import AudioDataset, VisualDataset
-from deepfake.models import AudioModel, VisualModel
+from deepfake.datasets import AudioDataset, MultimodalDataset, VisualDataset
+from deepfake.models import AudioModel, MultimodalModel, VisualModel
 
 
 # --------------------------------------------------------------------------- augmentation
@@ -99,7 +99,50 @@ def build_audio_dataset(index_csv, split: str, cfg: dict, train: bool, run_confi
     return ds
 
 
+# --------------------------------------------------------------------------- fusion
+
+FUSION_INPUTS = ("frames", "frame_mask", "mel", "has_video", "has_audio")
+
+
+def fusion_forward(model: MultimodalModel, batch: dict) -> torch.Tensor:
+    return model(**{k: batch[k] for k in FUSION_INPUTS})["logit"]
+
+
+def build_fusion_model(run_config: dict, pretrained: bool) -> nn.Module:
+    d = run_config["dropout"]
+    return MultimodalModel(
+        VisualModel(run_config["visual_backbone"], pretrained=pretrained, dropout=d),
+        AudioModel(run_config["audio_backbone"], pretrained=pretrained, dropout=d),
+        fusion=run_config["fusion"], dropout=d,
+        late_weight=run_config.get("late_weight", 0.5),
+        late_rule=run_config.get("late_rule", "weighted"),
+        modality_dropout=run_config.get("modality_dropout", 0.0),
+    )
+
+
+def build_fusion_dataset(index_csv, split: str, cfg: dict, train: bool, run_config: dict):
+    aug = train and run_config.get("augment", True)
+    ds = MultimodalDataset(index_csv, split, cfg, train=train,
+                           frame_transform=FrameAugment() if aug else None,
+                           mel_transform=SpecAugment() if aug else None,
+                           frames_per_item=run_config.get("frames_per_video"))
+    ds.df = ds.df[ds.df["label"].astype(int) >= 0].reset_index(drop=True)
+    return ds
+
+
 # --------------------------------------------------------------------------- registry
+
+def _branch_head_groups(model: nn.Module, lr: float) -> list[dict]:
+    """Single-branch models: backbone at lr, classifier head at 10x."""
+    return [{"params": model.backbone.parameters(), "lr": lr},
+            {"params": model.head.parameters(), "lr": lr * 10}]
+
+
+def _fusion_groups(model: MultimodalModel, lr: float) -> list[dict]:
+    """Fusion: both (pre-trained) branches at lr, the new fusion MLP at 10x."""
+    return [{"params": list(model.visual.parameters()) + list(model.audio.parameters()), "lr": lr},
+            {"params": model.mlp.parameters(), "lr": lr * 10}]
+
 
 @dataclass
 class Task:
@@ -108,6 +151,9 @@ class Task:
     forward: Callable[[nn.Module, dict], torch.Tensor]
     label_key: str
     defaults: dict = field(default_factory=dict)  # task-specific CLI defaults
+    # optimizer param groups (lr -> groups) and the parameters frozen during warm-up
+    param_groups: Callable[[nn.Module, float], list] = _branch_head_groups
+    frozen_params: Callable[[nn.Module], object] = lambda m: m.backbone.parameters()
 
 
 TASKS = {
@@ -115,4 +161,8 @@ TASKS = {
                    defaults={"dataset": "dfdc", "backbone_key": "visual_backbone", "batch_size": 8}),
     "audio": Task(build_audio_model, build_audio_dataset, audio_forward, "audio_label",
                   defaults={"dataset": "asvspoof", "backbone_key": "audio_backbone", "batch_size": 32}),
+    "fusion": Task(build_fusion_model, build_fusion_dataset, fusion_forward, "label",
+                   defaults={"dataset": "fakeavceleb", "batch_size": 8, "freeze_epochs": 2},
+                   param_groups=_fusion_groups,
+                   frozen_params=lambda m: list(m.visual.parameters()) + list(m.audio.parameters())),
 }

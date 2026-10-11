@@ -1,7 +1,7 @@
 # Robust Multimodal Deepfake Analysis: Project Plan
 
 **Type:** College project · **Compute:** Google Colab (GPU) for training, Mac for coding
-**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ (training runs pending) · next: Phase 4
+**Status:** Phase 0 ✅ · Phase 1 code ✅ (waiting on dataset access) · Phase 2 code ✅ · Phase 3 code ✅ · Phase 4 code ✅ (training runs pending) · next: Phase 5
 **Task tracker:** [TASKS.md](TASKS.md)
 
 ---
@@ -116,15 +116,15 @@ DeepFake/
 │   ├── preprocessing/   frames.py · faces.py · audio.py · run.py
 │   ├── datasets/        multimodal.py · visual.py · audio.py
 │   ├── models/          visual.py · audio.py · fusion.py
-│   ├── evaluation/      metrics.py · evaluate.py · plots.py   (+ robustness_eval.py later)
+│   ├── evaluation/      metrics.py · evaluate.py · compare.py · plots.py   (+ robustness_eval.py later)
 │   ├── robustness/      degradations.py  (Phase 5)
 │   ├── explainability/  gradcam.py       (Phase 6)
-│   └── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py   (+ fusion)
+│   └── training/        engine.py · tasks.py · runner.py · train_visual.py · train_audio.py · train_fusion.py
 ├── app/app.py           (Phase 7)
-├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio
+├── notebooks/           00_colab_setup · 01_download_datasets · 02_preprocess · 03_train_visual · 04_train_audio · 05_train_fusion
 ├── scripts/             make_notebooks.py
 ├── tests/               test_metrics · test_preprocessing · test_models
-└── reports/             figures + results (later)
+└── reports/             results.md (template) + figures
 ```
 
 ---
@@ -159,9 +159,12 @@ DeepFake/
 - (Stretch) frozen wav2vec2 features as a comparison.
 - **Deliverable:** checkpoint, EER/AUC, per-attack table, curves.
 
-### Phase 4: Multimodal fusion
-- Late fusion (weight tuned on val) vs. intermediate fusion (branches initialised from Phases 2–3).
-- Results per FakeAVCeleb category (which fakes each branch catches).
+### Phase 4: Multimodal fusion ✅ code / ⬜ training runs
+- `training/train_fusion.py` on FakeAVCeleb with the overall label; branches loaded from the Phase 2 and 3 checkpoints.
+- Late fusion: weighted, max or noisy-OR, whichever has the best validation AUC (no training).
+- Intermediate fusion: embeddings → MLP, branches frozen first, then fine-tuned; modality dropout 0.2.
+- `evaluation/compare.py`: visual-only vs audio-only vs late vs intermediate on the same test set, with per-category accuracy.
+- Notebook `05_train_fusion.ipynb`.
 - **Deliverable:** comparison table. This is the core result.
 
 ### Phase 5: Robustness

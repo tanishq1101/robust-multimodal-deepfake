@@ -17,7 +17,7 @@ Last updated: 2026-10-11
 | R1 | Run notebooks 00 → 01 → 02 in Colab on DFDC + ASVspoof | You | ⬜ |
 | R2 | Run notebook 03: first visual baseline on DFDC | You | ⬜ |
 | R3 | Run notebook 04 step 1: audio pre-training on ASVspoof | You | ⬜ (no approval needed) |
-| P4 | Phase 4: multimodal fusion | Code | ⬜ next |
+| P5 | Phase 5: robustness (degradations + stress tests) | Code | ⬜ next |
 
 ---
 
@@ -79,17 +79,19 @@ Last updated: 2026-10-11
 | 3.9 | Ablation: with vs. without ASVspoof pre-training | table in `reports/results.md` | ⏳ needs 1.10 |
 | 3.10 | (Stretch) frozen wav2vec2-base features + linear head | comparison row | ⬜ |
 
-## Phase 4: Multimodal fusion ⬜
+## Phase 4: Multimodal fusion 🔄 (code ✅, training runs pending)
 
 | # | Task | Spec | Status |
 |---|---|---|---|
-| 4.1 | `fusion` task + `train_fusion.py` | init branches from best Phase 2/3 checkpoints; label key `label`; reuse `training/runner.py` | ⬜ |
-| 4.2 | Late fusion | tune the visual weight on val; no training | ⬜ |
-| 4.3 | Intermediate fusion | freeze branches → train MLP → optionally unfreeze with low LR | ⬜ |
-| 4.4 | Modality dropout | randomly zero one modality in training (missing-modality robustness) | ⬜ |
-| 4.5 | Per-category results | RV-RA / RV-FA / FV-RA / FV-FA for every model (`per_category.csv` already produced by evaluation) | ⬜ |
-| 4.6 | Comparison table | visual-only · audio-only · late · intermediate | ⬜ |
-| 4.7 | Notebook `05_train_fusion.ipynb` + tests | | ⬜ |
+| 4.1 | `fusion` task + `train_fusion.py` | `MultimodalModel` on the overall `label`; branches initialised from `--visual-ckpt` / `--audio-ckpt` (backbone names read from those checkpoints); reuses `training/runner.py` (task-specific param groups + frozen params) | ✅ |
+| 4.2 | Late fusion | no training; grid over rules `weighted` (visual weight 0…1, step 0.05), `max`, `noisy_or`; best val AUC chosen; `calibration.csv` saved. Absent modality excluded; none present → 0.5 | ✅ |
+| 4.3 | Intermediate fusion | `[visual emb 1280 \| audio emb 512 \| 2 presence flags]` → Linear 256 → ReLU → Dropout → Linear 1; branches frozen for 2 epochs (default), then joint fine-tuning (branches at `--lr`, MLP at 10×) | ✅ |
+| 4.4 | Modality dropout | `--modality-dropout 0.2`: for samples with both modalities, hide one at random (training only); never removes a sample's only modality | ✅ |
+| 4.5 | Fair comparison tool | `evaluation/compare.py`: every model scored on the same full test set against the overall label; `comparison.csv/.md/.png` + per-category accuracy pivot | ✅ |
+| 4.6 | Notebook + tests | `05_train_fusion.ipynb`; tests: late rules, modality dropout, frozen-branch init, calibration, comparison | ✅ |
+| 4.7 | Run late + intermediate fusion on FakeAVCeleb | targets: fusion beats the best single branch in AUC and is good on all 4 categories | ⏳ needs 2.8 + 3.8 |
+| 4.8 | Record comparison in `reports/results.md` | copy `comparison.md` | ⏳ needs 4.7 |
+| 4.9 | (Optional) attention / gated fusion variant | extra comparison row | ⬜ |
 
 ## Phase 5: Robustness ⬜
 
@@ -121,7 +123,7 @@ Last updated: 2026-10-11
 
 | # | Task | Spec | Status |
 |---|---|---|---|
-| 8.1 | `reports/results.md` | all tables + figures | ⬜ |
+| 8.1 | `reports/results.md` | all tables + figures (template created; fill in as runs finish) | 🔄 |
 | 8.2 | Final PPT | you'll share the format | ⬜ |
 | 8.3 | README polish | results summary, demo GIF | ⬜ |
 
@@ -139,3 +141,5 @@ Last updated: 2026-10-11
 | 2026-10-11 | One shared training runner for all branches | Identical CLI/behaviour for visual and audio, less code to maintain |
 | 2026-10-11 | Audio branch trained on `audio_label`; DFDC excluded from it | DFDC does not label audio fakes separately |
 | 2026-10-11 | Audio: ASVspoof pre-training → FakeAVCeleb fine-tuning | ASVspoof is much larger and speech-focused; ablation planned to verify the benefit |
+| 2026-10-11 | Late fusion offers max / noisy-OR, not only a weighted average | The overall label is an OR of face-fake and voice-fake; averaging dilutes a single confident fake branch |
+| 2026-10-11 | Comparison scores all models against the overall label on the same samples | Fair table: single-branch models are penalised for the fake type they cannot see |
