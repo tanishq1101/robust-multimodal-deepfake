@@ -1,0 +1,14 @@
+{
+  "name": "deepfake-presentation",
+  "private": true,
+  "description": "Builds reports/presentation.pptx from the published model results",
+  "scripts": { "build": "node build.js" },
+  "dependencies": {
+    "jszip": "3.10.1",
+    "pptxgenjs": "3.12.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-icons": "5.4.0",
+    "sharp": "0.33.5"
+  }
+}

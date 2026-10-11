@@ -32,3 +32,6 @@ kaggle.json
 # Assistant tooling
 .claude/
 CLAUDE.md
+
+# Node (scripts/presentation)
+node_modules/
