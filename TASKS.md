@@ -14,9 +14,9 @@ Last updated: 2026-10-11
 | D1 | Submit FakeAVCeleb request form | You | ⏳ |
 | D2 | Kaggle account + accept DFDC rules + `kaggle.json` | You | ⏳ |
 | D3 | (Optional) Submit Celeb-DF v2 request form | You | ⏳ |
-| R1 | Run notebooks 00 → 01 → 02 in Colab on DFDC + ASVspoof | You | ⬜ |
+| R1 | Run notebooks 00 → 01 → 02 in Colab on DFDC + ASVspoof | You | 🔄 ASVspoof done via `10_reviewed_colab_training` (2026-10-11); DFDC pending |
 | R2 | Run notebook 03: first visual baseline on DFDC | You | ⬜ |
-| R3 | Run notebook 04 step 1: audio pre-training on ASVspoof | You | ⬜ (no approval needed) |
+| R3 | Run notebook 04 step 1: audio pre-training on ASVspoof | You | ✅ 2026-10-11, run `audio_asvspoof_3a53cf51` (via notebook 10) |
 | R4 | After FakeAVCeleb approval: notebooks 01–02 (FakeAVCeleb), 03 + 04 step 2 (`DATASET="fakeavceleb"`) | You | ⏳ needs D1 |
 | R5 | Notebooks 05 (fusion) → 06 (robustness) → 07 (Grad-CAM) | You | ⏳ needs R4 |
 | R6 | Notebook 08: build the report, copy it into `reports/`, record a demo video | You | ⏳ needs R5 |
@@ -80,8 +80,8 @@ All code for Phases 0–8 is implemented and tested. What remains is running it 
 | 3.4 | SpecAugment | 2 frequency masks ≤16 bins + 2 time masks ≤40 frames, filled with the mean; training only | ✅ |
 | 3.5 | Per-category evaluation | manifests now have a `category` column; `test/per_category.csv` gives n, mean score and accuracy per category, plus AUC/EER of each fake category vs all reals (= EER per ASVspoof attack A07–A19, per FakeAVCeleb category) | ✅ |
 | 3.6 | Notebook + tests | `04_train_audio.ipynb` (pre-train, fine-tune, pre-training ablation); tests for audio training, init-from, label filtering, SpecAugment, per-category | ✅ |
-| 3.7 | Pre-train on ASVspoof 2019 LA | target eval EER ≤ 10%; record per-attack EER | ⬜ R3 |
-| 3.8 | Fine-tune on FakeAVCeleb audio | `--init-from audio_asvspoof/best.pt --lr 3e-5 --freeze-epochs 0`; report AUC/EER | ⏳ needs 1.10 |
+| 3.7 | Pre-train on ASVspoof 2019 LA | target eval EER ≤ 10%; record per-attack EER | ✅ balanced subset (5,000 clips/split): test AUC 0.977, EER 6.2%; per-attack EER in `reports/results.md` (A17 hardest, EER 34.4%). Checkpoint `checkpoints/audio_asvspoof_3a53cf51/best.pt` |
+| 3.8 | Fine-tune on FakeAVCeleb audio | `--init-from audio_asvspoof_3a53cf51/best.pt --lr 3e-5 --freeze-epochs 0`; report AUC/EER | ⏳ needs 1.10 |
 | 3.9 | Ablation: with vs. without ASVspoof pre-training | table in `reports/results.md` | ⏳ needs 1.10 |
 | 3.10 | (Stretch) frozen wav2vec2-base features + linear head | comparison row | ⬜ |
 
