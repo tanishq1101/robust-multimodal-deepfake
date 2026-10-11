@@ -1,0 +1,34 @@
+# Environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Data and outputs (live on Google Drive, never in git)
+data/
+checkpoints/
+runs/
+outputs/
+*.mp4
+*.flac
+*.wav
+*.zip
+*.npz
+*.pt
+*.pth
+
+# Secrets
+kaggle.json
+.env
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Assistant tooling
+.claude/
+CLAUDE.md

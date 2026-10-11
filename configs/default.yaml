@@ -1,0 +1,50 @@
+# Default configuration for Robust Multimodal Deepfake Analysis.
+# Paths are relative to `data_root`, which is resolved by deepfake.config:
+#   1. $DEEPFAKE_DATA_ROOT if set
+#   2. /content/drive/MyDrive/deepfake_project   (Google Colab with Drive mounted)
+#   3. <repo>/data                               (local)
+
+# Raw datasets: $DEEPFAKE_RAW_ROOT, else /content/raw on Colab (local VM disk), else data_root/raw.
+paths:
+  raw: raw                  # raw/<dataset>/...   downloaded datasets (see note above)
+  processed: processed      # processed/<dataset>/{faces,mel}/...
+  manifests: manifests      # manifests/<dataset>.csv, manifests/<dataset>_processed.csv
+  checkpoints: checkpoints
+  outputs: outputs
+
+seed: 42
+
+splits:
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+video:
+  num_frames: 16            # frames sampled uniformly per video
+  face_size: 224            # face crop size (pixels)
+  face_margin: 1.3          # bbox enlargement factor around detected face
+  detector_score: 0.7       # YuNet confidence threshold
+  jpeg_quality: 95          # face crops are stored as JPEG to save Drive space
+
+audio:
+  sample_rate: 16000
+  max_seconds: 10.0         # longest audio stored per clip
+  window_seconds: 4.0       # crop length fed to the audio model
+  n_fft: 512
+  win_length: 400           # 25 ms
+  hop_length: 160           # 10 ms
+  n_mels: 128
+
+model:
+  visual_backbone: efficientnet_b0
+  audio_backbone: resnet18
+  pretrained: true
+  fusion: intermediate      # late | intermediate
+  dropout: 0.3
+
+train:
+  batch_size: 8
+  epochs: 10
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+  num_workers: 2
+  early_stopping_patience: 3
