@@ -180,7 +180,7 @@ async function build() {
     iconCircle(s, k, x, 5.25, 0.55, C.accent1, "title " + label);
     text(s, label, { x: x + 0.7, y: 5.25, w: 1.5, h: 0.55, valign: "middle", fontSize: 15, color: C.background1 });
   });
-  text(s, "Project review · October 2026", { x: MX, y: 6.45, w: 6, h: 0.4, fontSize: 14, color: C.background2 });
+  text(s, "Project review", { x: MX, y: 6.45, w: 6, h: 0.4, fontSize: 14, color: C.background2 });
   s.addNotes("Title. The project detects deepfake videos by checking both the face and the voice, tests how robust the detector is to compression and noise, and explains every decision with heatmaps. Today: what is built, the first real trained model (the voice model), the demo, and what is still pending.");
 
   // 2 ---------------------------------------------------------------- problem

@@ -35,3 +35,15 @@ CLAUDE.md
 
 # Node (scripts/presentation)
 node_modules/
+
+# Local document and presentation build artifacts
+/.chart-data-*/
+/.presentation-build/
+/output/
+/reports/literature_review_preview/
+/reports/colab-drive-*.jpg
+/reports/homes-drive-permission.jpg
+/paper/docx_build/blocks.json
+/paper/docx_build/eq/
+/paper/docx_build/*.pdf
+/paper/docx_build/arch.png
