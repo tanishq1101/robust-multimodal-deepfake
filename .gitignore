@@ -18,6 +18,11 @@ __pycache__/
 *.npz
 *.pt
 *.pth
+models/face_dfdc_effb7/final_*
+
+# Demo clips are small, labelled and committed on purpose (see demo_samples/README.md)
+!demo_samples/**/*.mp4
+!demo_samples/**/*.wav
 
 # Secrets
 kaggle.json

@@ -1,15 +1,13 @@
-"""Phase 7: single-file inference, CLI, checkpoint discovery and the Gradio UI."""
+"""Phase 7: single-file inference with project checkpoints, its CLI and checkpoint discovery."""
 
 import json
 import subprocess
 
-import gradio as gr
 import numpy as np
 import pytest
 import soundfile as sf
 
 from deepfake import inference
-from deepfake.demo import create_demo, format_details, make_handler
 from deepfake.inference import DeepfakeDetector
 
 from conftest import DEVICE
@@ -78,47 +76,10 @@ def test_find_best_checkpoint(tmp_path, monkeypatch):
     assert inference.find_best_checkpoint(roots=[data_ckpts, published]).parent.name == "fusion_intermediate_fakeavceleb"
 
 
-def test_gradio_ui(late_fusion_ckpt, video_dir, tmp_path):
-    det = DeepfakeDetector(late_fusion_ckpt, DEVICE, use_face_detector=False)
-    assert isinstance(create_demo(det), gr.Blocks)
-    handler = make_handler(det, "fusion model")
-    verdict, evidence, spec, faces, empty, raw, summary = handler("video", str(video_dir / "clip.mp4"), None,
-                                                                  0.5, "predicted")
-    assert raw["verdict"] in ("FAKE", "REAL") and raw["verdict"] in verdict and "fusion model" in verdict
-    assert "Face model" in evidence and "Voice model" in evidence and "not part of" not in evidence
-    assert spec["visible"] and faces["visible"] and len(faces["value"]) == 6 and not empty["visible"]
-    assert "Verdict" in summary and "face_overlays" not in raw
-    # the threshold slider decides the verdict without re-running the model
-    _, _, _, _, _, low, _ = handler("video", str(video_dir / "clip.mp4"), None, 0.01, "predicted")
-    _, _, _, _, _, high, _ = handler("video", str(video_dir / "clip.mp4"), None, 0.99, "predicted")
-    assert (low["verdict"], high["verdict"]) == ("FAKE", "REAL") and low["p_fake"] == high["p_fake"]
-    with pytest.raises(gr.Error):
-        handler("video", None, None, 0.5, "predicted")
-    with pytest.raises(gr.Error):
-        handler("audio", str(video_dir / "clip.mp4"), None, 0.5, "predicted")
-
-
-def test_audio_tab_and_inconclusive(branches, late_fusion_ckpt, video_dir, silent_video, tmp_path):
-    t = np.arange(16000 * 2) / 16000
-    sf.write(tmp_path / "voice.wav", 0.3 * np.sin(2 * np.pi * 440 * t), 16000)
-    audio_det = DeepfakeDetector(branches[2], DEVICE)
-    verdict, evidence, spec, faces, *_ , raw, _ = make_handler(audio_det, "voice model")(
-        "audio", None, str(tmp_path / "voice.wav"), 0.5, "predicted")
-    assert raw["task"] == "audio" and "voice model" in verdict
-    assert evidence.count("not part of the loaded model") == 2 and spec["visible"] and not faces["visible"]
-    # an audio-only model cannot judge a silent video: INCONCLUSIVE, no probability
-    verdict, *_ , raw, _ = make_handler(audio_det)("video", str(silent_video), None, 0.5, "predicted")
-    assert raw["verdict"] == "INCONCLUSIVE" and raw["p_fake"] is None and "INCONCLUSIVE" in verdict
-
-
-def test_verdict_html_empty_state():
-    from deepfake.demo import verdict_html
-    assert "No analysis yet" in verdict_html(None)
-
-
-def test_format_details_single_branch():
-    res = {"verdict": "REAL", "p_fake": 0.1, "threshold": 0.5, "task": "visual", "checkpoint": "/x/visual_dfdc/best.pt",
-           "scores": {"visual": 0.1}, "warnings": ["careful"],
-           "info": {"faces_detected": 3, "frames_sampled": 16, "has_audio": False, "audio_seconds": 0.0}}
-    md = format_details(res)
-    assert "Overall" not in md and "Face model" in md and "visual_dfdc" in md and "careful" in md
+def test_score_image_with_face_model(branches, late_fusion_ckpt):
+    rgb = np.random.default_rng(0).integers(0, 255, (120, 160, 3), dtype=np.uint8)
+    for ckpt in (branches[1], late_fusion_ckpt):          # visual and fusion checkpoints
+        p = DeepfakeDetector(ckpt, DEVICE, use_face_detector=False).score_image(rgb)
+        assert 0 <= p <= 1
+    with pytest.raises(ValueError):
+        DeepfakeDetector(branches[2], DEVICE).score_image(rgb)

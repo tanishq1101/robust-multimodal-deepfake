@@ -9,6 +9,7 @@ far less space on Google Drive than thousands of PNGs.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import urllib.request
 from pathlib import Path
@@ -16,11 +17,34 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-YUNET_URL = (
-    "https://github.com/opencv/opencv_zoo/raw/main/models/"
-    "face_detection_yunet/face_detection_yunet_2023mar.onnx"
+YUNET_FILE = "face_detection_yunet_2023mar.onnx"
+# opencv_zoo stores the model in Git LFS: the media URL serves it directly, the /raw/ URL redirects
+YUNET_URLS = (
+    f"https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_detection_yunet/{YUNET_FILE}",
+    f"https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/{YUNET_FILE}",
 )
+YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 CACHE_DIR = Path.home() / ".cache" / "deepfake"
+
+
+def yunet_model() -> Path:
+    """Path of the cached YuNet model, downloading and checksum-verifying it on first use."""
+    model = CACHE_DIR / YUNET_FILE
+    if model.is_file() and hashlib.sha256(model.read_bytes()).hexdigest() == YUNET_SHA256:
+        return model
+    model.parent.mkdir(parents=True, exist_ok=True)
+    errors = []
+    for url in YUNET_URLS:
+        try:
+            data = urllib.request.urlopen(url, timeout=60).read()
+        except OSError as e:
+            errors.append(f"{url}: {e}")
+            continue
+        if hashlib.sha256(data).hexdigest() == YUNET_SHA256:
+            model.write_bytes(data)
+            return model
+        errors.append(f"{url}: checksum mismatch")
+    raise RuntimeError("could not download the YuNet face detector: " + "; ".join(errors))
 
 
 class FaceDetector:
@@ -29,12 +53,12 @@ class FaceDetector:
     def __init__(self, score_threshold: float = 0.7):
         self.backend = "yunet"
         try:
-            model = CACHE_DIR / Path(YUNET_URL).name
-            if not model.exists():
-                model.parent.mkdir(parents=True, exist_ok=True)
-                urllib.request.urlretrieve(YUNET_URL, model)
-            self._yunet = cv2.FaceDetectorYN.create(str(model), "", (320, 320), score_threshold)
+            self._yunet = cv2.FaceDetectorYN.create(str(yunet_model()), "", (320, 320), score_threshold)
         except Exception as e:  # offline or old OpenCV
+            # OpenCV 5 no longer ships the Haar cascades, so the fallback only exists on OpenCV 4
+            if not hasattr(cv2, "CascadeClassifier"):
+                raise RuntimeError(f"No face detector available: {e}. Connect to the internet once so the "
+                                   f"YuNet model can be cached in {CACHE_DIR}, or install opencv<5.") from e
             print(f"YuNet unavailable ({e}); falling back to Haar cascade")
             self.backend = "haar"
             self._haar = cv2.CascadeClassifier(

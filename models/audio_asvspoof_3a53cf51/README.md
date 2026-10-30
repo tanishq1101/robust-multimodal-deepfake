@@ -2,7 +2,8 @@
 
 ResNet-18 (ImageNet initialisation) that scores 4-second log-mel spectrograms as bona fide or
 spoofed speech. It was trained on a Google Colab T4 on 11 October 2026 with
-`notebooks/10_reviewed_colab_training.ipynb`.
+`notebooks/10_reviewed_colab_training.ipynb` (since merged into
+`notebooks/deepfake_pipeline.ipynb`; the original notebook is in git history up to commit `04fcdec`).
 
 ## Weights
 

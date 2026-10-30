@@ -1,11 +1,15 @@
-"""Download the published trained weights (GitHub Release) into models/<run>/best.pt.
+"""Download the model weights the demo uses into models/, verified by SHA-256.
 
-The run folders in models/ are in git (config, history, test metrics, figures); the weights are
-too large for git (>100 MB), so they are attached to a GitHub Release and verified by SHA-256.
+  audio_asvspoof_3a53cf51   this project's voice model (GitHub Release of this repo); its run
+                            folder in models/ holds the config, history, test metrics and figures
+  face_dfdc_effb7           pretrained face-swap detector: the DFDC-winning EfficientNet-B7 by
+                            Selim Seferbekov (MIT licence), from that project's GitHub Release
+
+The weights are too large for git (134 MB and 267 MB).
 
 Usage:
-  python scripts/download_model.py                 # every published model
-  python scripts/download_model.py audio_asvspoof_3a53cf51
+  python scripts/download_model.py                 # every model
+  python scripts/download_model.py face_dfdc_effb7
 """
 
 from __future__ import annotations
@@ -27,6 +31,13 @@ PUBLISHED = {
         "sha256": "bdd5f5ec458936669161459fb9c9b084a069caaa1c226d8e5d31b688c7f4acc8",
         "size": 134_258_271,
     },
+    "face_dfdc_effb7": {
+        "url": "https://github.com/selimsef/dfdc_deepfake_challenge/releases/download/0.0.1/"
+               "final_111_DeepFakeClassifier_tf_efficientnet_b7_ns_0_36",
+        "file": "final_111_DeepFakeClassifier_tf_efficientnet_b7_ns_0_36",
+        "sha256": "9db77ab9318863e2f8ab287c8eb83c2232584b82dc2fb41f1d614ddd7900cccb",
+        "size": 266_910_617,
+    },
 }
 
 
@@ -40,11 +51,11 @@ def sha256(path: Path) -> str:
 
 def download(name: str) -> Path:
     spec = PUBLISHED[name]
-    dest = MODELS_DIR / name / "best.pt"
+    dest = MODELS_DIR / name / spec.get("file", "best.pt")
     if dest.is_file() and sha256(dest) == spec["sha256"]:
         print(f"Already present and verified: {dest}")
         return dest
-    url = f"https://github.com/{REPO}/releases/download/{spec['tag']}/{spec['asset']}"
+    url = spec.get("url") or f"https://github.com/{REPO}/releases/download/{spec['tag']}/{spec['asset']}"
     tmp = dest.with_suffix(".part")
     dest.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(url, stream=True, timeout=60) as r:

@@ -7,7 +7,7 @@
 | **ASVspoof 2019 LA** | Audio branch pre-training (bona fide vs. synthetic/converted speech) | 7.6 GB zip | Free | ✅ link verified, download in Colab |
 | **Celeb-DF v2** | Cross-dataset test of the visual branch | 590 real + 5,639 fake videos | Request form | ⏳ submit form (optional) |
 
-All downloads run in **Colab** (`notebooks/01_download_datasets.ipynb`). Your Mac only needs the code.
+All downloads run in **Colab** (`notebooks/deepfake_pipeline.ipynb`, §3). Your Mac only needs the code.
 
 ---
 
@@ -18,7 +18,7 @@ All downloads run in **Colab** (`notebooks/01_download_datasets.ipynb`). Your Ma
    (direct form: https://docs.google.com/forms/d/e/1FAIpQLSfPDd3oV0auqmmWEgCSaTEQ6CGpFeB-ozQJ35x-B_0Xjd93bw/viewform)
    Use your college email and mention it's for an academic project.
 2. When approved, they email a download link or a `download.sh` script.
-3. In notebook 01, paste the link into `FAKEAVCELEB_URL`, or use the script cell.
+3. In the notebook settings cell (§2), paste the link into `FAKEAVCELEB_URL`.
 
 Folder layout after extraction (the code finds it automatically):
 ```
@@ -35,7 +35,7 @@ FakeAVCeleb_v1.2/
 2. Accept the competition rules: https://www.kaggle.com/competitions/deepfake-detection-challenge/rules
 3. Kaggle → **Settings** → **API** → **Create New Token**. This downloads `kaggle.json`.
    Keep it private and never commit it (`.gitignore` already excludes it).
-4. In notebook 01, upload `kaggle.json` when asked, then run the DFDC cell.
+4. Run §3 of the notebook and upload `kaggle.json` when asked.
 
 The script downloads the default competition archive and keeps only `train_sample_videos/` with `metadata.json` (labels REAL/FAKE, plus which real video each fake was made from).
 
@@ -48,7 +48,7 @@ Official splits are kept: train → train, dev → val, eval → test. The eval 
 ## 4. Celeb-DF v2 (optional, for cross-dataset testing)
 
 1. Request access via the form linked at https://github.com/yuezunli/celeb-deepfakeforensics
-2. Paste the link into `CELEBDF_URL` in notebook 01.
+2. Paste the link into `CELEBDF_URL` in the notebook settings cell (§2).
 
 ---
 
@@ -59,7 +59,7 @@ Official splits are kept: train → train, dev → val, eval → test. The eval 
 | Raw datasets | Colab VM disk `/content/raw/` | Too big for free 15 GB Drive; wiped when the session ends |
 | Manifests, processed faces / spectrograms / 16 kHz FLAC audio, checkpoints | `MyDrive/deepfake_project/` | Small, persistent |
 
-So run notebook **01 then 02 in the same Colab session**. After preprocessing, the raw data is no longer needed.
+So run notebook **§3 then §4 in the same Colab session**. After preprocessing, the raw data is no longer needed.
 Override the locations with the `DEEPFAKE_RAW_ROOT` / `DEEPFAKE_DATA_ROOT` environment variables.
 
 ## Leakage-free splits
