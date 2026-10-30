@@ -1,0 +1,96 @@
+file,group,system,label,p_windows,p_centre
+as_01_melpost.wav,ablation study,VITS ablation: mel posterior,1,0.99837,0.99893
+as_01_noflow.wav,ablation study,VITS ablation: no flow,1,0.9995,0.99994
+as_01_vits.wav,ablation study,VITS,1,0.99921,0.99992
+as_02_melpost.wav,ablation study,VITS ablation: mel posterior,1,0.99952,0.99993
+as_02_noflow.wav,ablation study,VITS ablation: no flow,1,0.99991,0.99999
+as_02_vits.wav,ablation study,VITS,1,0.99964,0.99972
+as_03_melpost.wav,ablation study,VITS ablation: mel posterior,1,0.9993,0.99989
+as_03_noflow.wav,ablation study,VITS ablation: no flow,1,0.99665,0.99915
+as_03_vits.wav,ablation study,VITS,1,0.99872,0.99303
+as_04_melpost.wav,ablation study,VITS ablation: mel posterior,1,0.99988,0.99996
+as_04_noflow.wav,ablation study,VITS ablation: no flow,1,0.99974,0.99999
+as_04_vits.wav,ablation study,VITS,1,0.99955,0.99991
+as_05_melpost.wav,ablation study,VITS ablation: mel posterior,1,0.99155,0.98179
+as_05_noflow.wav,ablation study,VITS ablation: no flow,1,0.99993,0.99999
+as_05_vits.wav,ablation study,VITS,1,0.99801,0.98597
+ms_01_gh.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN,1,0.99993,0.99993
+ms_01_ghf.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99981,0.99981
+ms_01_gt.wav,VCTK (multi-speaker),genuine recording,0,0.99992,0.99992
+ms_01_th.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN,1,0.99995,0.99995
+ms_01_thf.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99993,0.99993
+ms_01_vits.wav,VCTK (multi-speaker),VITS,1,0.99998,0.99998
+ms_02_gh.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN,1,1.0,1.0
+ms_02_ghf.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+ms_02_gt.wav,VCTK (multi-speaker),genuine recording,0,0.99998,0.99998
+ms_02_th.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ms_02_thf.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+ms_02_vits.wav,VCTK (multi-speaker),VITS,1,0.99997,0.99997
+ms_03_gh.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN,1,0.99999,0.99999
+ms_03_ghf.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+ms_03_gt.wav,VCTK (multi-speaker),genuine recording,0,1.0,1.0
+ms_03_th.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ms_03_thf.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,1.0,1.0
+ms_03_vits.wav,VCTK (multi-speaker),VITS,1,0.99996,0.99996
+ms_04_gh.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN,1,0.99997,0.99997
+ms_04_ghf.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99997,0.99997
+ms_04_gt.wav,VCTK (multi-speaker),genuine recording,0,0.99999,0.99999
+ms_04_th.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ms_04_thf.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,1.0,1.0
+ms_04_vits.wav,VCTK (multi-speaker),VITS,1,0.99999,0.99999
+ms_05_gh.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN,1,1.0,1.0
+ms_05_ghf.wav,VCTK (multi-speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,1.0,1.0
+ms_05_gt.wav,VCTK (multi-speaker),genuine recording,0,0.99999,0.99999
+ms_05_th.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ms_05_thf.wav,VCTK (multi-speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,1.0,1.0
+ms_05_vits.wav,VCTK (multi-speaker),VITS,1,1.0,1.0
+ss_01_dp.wav,LJ Speech (single speaker),VITS (DDP),1,0.99865,0.99999
+ss_01_gh.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN,1,1.0,1.0
+ss_01_ghf.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99994,1.0
+ss_01_gt.wav,LJ Speech (single speaker),genuine recording,0,0.92189,0.99955
+ss_01_th.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ss_01_thf.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99995,0.99998
+ss_01_vits.wav,LJ Speech (single speaker),VITS,1,0.99996,0.99999
+ss_02_dp.wav,LJ Speech (single speaker),VITS (DDP),1,0.99996,1.0
+ss_02_gh.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN,1,0.99998,0.99999
+ss_02_ghf.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99977,0.99997
+ss_02_gt.wav,LJ Speech (single speaker),genuine recording,0,0.99998,0.99997
+ss_02_th.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ss_02_thf.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99996,0.99993
+ss_02_vits.wav,LJ Speech (single speaker),VITS,1,0.99996,0.99996
+ss_03_dp.wav,LJ Speech (single speaker),VITS (DDP),1,0.99877,0.9975
+ss_03_gh.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN,1,0.99995,0.99992
+ss_03_ghf.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99861,0.98648
+ss_03_gt.wav,LJ Speech (single speaker),genuine recording,0,0.99817,0.9918
+ss_03_th.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ss_03_thf.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99994,0.99997
+ss_03_vits.wav,LJ Speech (single speaker),VITS,1,0.99951,0.99987
+ss_04_dp.wav,LJ Speech (single speaker),VITS (DDP),1,0.99976,0.99994
+ss_04_gh.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN,1,0.99999,0.99999
+ss_04_ghf.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.99963,0.99968
+ss_04_gt.wav,LJ Speech (single speaker),genuine recording,0,0.98239,0.99955
+ss_04_th.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN,1,1.0,1.0
+ss_04_thf.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+ss_04_vits.wav,LJ Speech (single speaker),VITS,1,0.99982,0.99994
+ss_05_dp.wav,LJ Speech (single speaker),VITS (DDP),1,0.99683,0.99853
+ss_05_gh.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN,1,0.99992,0.99998
+ss_05_ghf.wav,LJ Speech (single speaker),Glow-TTS + HiFi-GAN (fine-tuned),1,0.9995,0.99983
+ss_05_gt.wav,LJ Speech (single speaker),genuine recording,0,0.97438,0.99407
+ss_05_th.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN,1,0.99999,1.0
+ss_05_thf.wav,LJ Speech (single speaker),Tacotron 2 + HiFi-GAN (fine-tuned),1,0.9997,0.99997
+ss_05_vits.wav,LJ Speech (single speaker),VITS,1,0.99759,0.99886
+sv_01_ghf.wav,speech variation,Glow-TTS + HiFi-GAN (fine-tuned),1,0.99998,0.99998
+sv_01_thf.wav,speech variation,Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99994,0.99994
+sv_01_vits.wav,speech variation,VITS,1,0.99906,0.99906
+sv_02_ghf.wav,speech variation,Glow-TTS + HiFi-GAN (fine-tuned),1,0.99996,0.99996
+sv_02_thf.wav,speech variation,Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99996,0.99996
+sv_02_vits.wav,speech variation,VITS,1,0.99948,0.99948
+sv_03_ghf.wav,speech variation,Glow-TTS + HiFi-GAN (fine-tuned),1,0.99996,0.99996
+sv_03_thf.wav,speech variation,Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+sv_03_vits.wav,speech variation,VITS,1,0.99986,0.99986
+sv_04_ghf.wav,speech variation,Glow-TTS + HiFi-GAN (fine-tuned),1,0.99996,0.99996
+sv_04_thf.wav,speech variation,Tacotron 2 + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+sv_04_vits.wav,speech variation,VITS,1,0.99989,0.99989
+sv_05_ghf.wav,speech variation,Glow-TTS + HiFi-GAN (fine-tuned),1,0.99999,0.99999
+sv_05_thf.wav,speech variation,Tacotron 2 + HiFi-GAN (fine-tuned),1,1.0,1.0
+sv_05_vits.wav,speech variation,VITS,1,0.99991,0.99991

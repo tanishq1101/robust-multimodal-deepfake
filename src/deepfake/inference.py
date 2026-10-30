@@ -125,6 +125,28 @@ class DeepfakeDetector:
         info.update(has_face=has_video, has_audio=has_audio)
         return {k: t.to(self.device) for k, t in batch.items()}, info
 
+    @torch.no_grad()
+    def score_image(self, rgb: np.ndarray) -> float | None:
+        """Face P(fake) of one RGB image with a visual or fusion checkpoint; None if no face is found."""
+        if self.task not in ("visual", "fusion"):
+            raise ValueError(f"a {self.task} model cannot score images")
+        v, a = self.cfg["video"], self.cfg["audio"]
+        S = v["face_size"]
+        faces, detected = extract_faces([rgb], self.face_detector, S, v["face_margin"])
+        if self.face_detector is not None and not detected.any():
+            return None
+        frames = torch.zeros(1, v["num_frames"], 3, S, S)
+        mask = torch.zeros(1, v["num_frames"], dtype=torch.bool)
+        frames[0, 0], mask[0, 0] = face_to_tensor(faces[0]), True
+        frames, mask = frames.to(self.device), mask.to(self.device)
+        if self.task == "visual":
+            return torch.sigmoid(self.model(frames, mask)["logit"]).item()
+        mel = torch.zeros(1, 1, a["n_mels"], int(a["window_seconds"] * a["sample_rate"] / a["hop_length"]) + 1,
+                          device=self.device)
+        out = self.model(frames, mask, mel, torch.tensor([True], device=self.device),
+                         torch.tensor([False], device=self.device))
+        return torch.sigmoid(out["visual_logit"]).item()
+
     # ------------------------------------------------------------------ analysis
     @torch.no_grad()
     def _scores(self, batch: dict) -> dict:

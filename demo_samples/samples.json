@@ -1,0 +1,94 @@
+[
+  {
+    "kind": "video",
+    "path": "video/real_actor.mp4",
+    "label": "real",
+    "category": "RealVideo-RealAudio",
+    "description": "Unedited DFDC recording of a consenting actor.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc"
+  },
+  {
+    "kind": "video",
+    "path": "video/fake_faceswap.mp4",
+    "label": "fake",
+    "category": "FakeVideo-RealAudio",
+    "description": "DFDC face swap: another actor's face on this body, original voice.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc"
+  },
+  {
+    "kind": "video",
+    "path": "video/fake_cloned_voice.mp4",
+    "label": "fake",
+    "category": "RealVideo-FakeAudio",
+    "description": "The real clip above with its soundtrack replaced by VITS text-to-speech.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc; voice: VITS paper samples (Kim et al., 2021), github.com/jaywalnut310/vits-demo"
+  },
+  {
+    "kind": "video",
+    "path": "video/fake_faceswap_and_voice.mp4",
+    "label": "fake",
+    "category": "FakeVideo-FakeAudio",
+    "description": "The face swap above with its soundtrack replaced by Glow-TTS + HiFi-GAN speech.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc; voice: VITS paper samples (Kim et al., 2021), github.com/jaywalnut310/vits-demo"
+  },
+  {
+    "kind": "audio",
+    "path": "audio/real_ljspeech.wav",
+    "label": "real",
+    "category": "bona fide",
+    "description": "Original LJ Speech recording (public domain audiobook reading).",
+    "source": "VITS paper samples (Kim et al., 2021), github.com/jaywalnut310/vits-demo",
+    "text": "that not more than one bottle of wine or one quart of beer could be issued at one time. No account was taken of the amount of liquors admitted in one day,"
+  },
+  {
+    "kind": "audio",
+    "path": "audio/fake_vits.wav",
+    "label": "fake",
+    "category": "VITS",
+    "description": "The same sentence spoken by VITS, an end-to-end TTS model trained on this voice.",
+    "source": "VITS paper samples (Kim et al., 2021), github.com/jaywalnut310/vits-demo",
+    "text": "that not more than one bottle of wine or one quart of beer could be issued at one time. No account was taken of the amount of liquors admitted in one day,"
+  },
+  {
+    "kind": "audio",
+    "path": "audio/fake_tacotron2.wav",
+    "label": "fake",
+    "category": "Tacotron 2 + HiFi-GAN",
+    "description": "The same sentence from Tacotron 2 with a HiFi-GAN vocoder.",
+    "source": "VITS paper samples (Kim et al., 2021), github.com/jaywalnut310/vits-demo",
+    "text": "that not more than one bottle of wine or one quart of beer could be issued at one time. No account was taken of the amount of liquors admitted in one day,"
+  },
+  {
+    "kind": "audio",
+    "path": "audio/fake_glowtts.wav",
+    "label": "fake",
+    "category": "Glow-TTS + HiFi-GAN",
+    "description": "The same sentence from Glow-TTS with a HiFi-GAN vocoder.",
+    "source": "VITS paper samples (Kim et al., 2021), github.com/jaywalnut310/vits-demo",
+    "text": "that not more than one bottle of wine or one quart of beer could be issued at one time. No account was taken of the amount of liquors admitted in one day,"
+  },
+  {
+    "kind": "image",
+    "path": "image/real_face.jpg",
+    "label": "real",
+    "category": "real photo",
+    "description": "Frame of the unedited DFDC recording.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc"
+  },
+  {
+    "kind": "image",
+    "path": "image/fake_faceswap_front.jpg",
+    "label": "fake",
+    "category": "face swap",
+    "description": "Frame of the DFDC face swap, looking at the camera.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc"
+  },
+  {
+    "kind": "image",
+    "path": "image/fake_faceswap_gesture.jpg",
+    "label": "fake",
+    "category": "face swap",
+    "description": "Another frame of the same face swap, mid-gesture.",
+    "source": "DFDC preview set (Dolhansky et al., 2019), via polimi-ispl/icpr2020dfdc"
+  }
+]

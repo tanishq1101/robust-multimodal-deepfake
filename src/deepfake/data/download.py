@@ -179,7 +179,7 @@ def get_dfdc(raw: Path, archive: str | None = None) -> None:
     if not (Path.home() / ".kaggle" / "kaggle.json").exists() and not _kaggle_env():
         sys.exit(
             "Kaggle API token missing. Kaggle -> Settings -> API -> 'Create New Token', then put\n"
-            "kaggle.json in ~/.kaggle/ (Colab: see notebooks/01_download_datasets.ipynb).\n"
+            "kaggle.json in ~/.kaggle/ (Colab: see notebooks/deepfake_pipeline.ipynb, section 3).\n"
             "Also open https://www.kaggle.com/c/deepfake-detection-challenge/rules and accept them."
         )
     raw.mkdir(parents=True, exist_ok=True)
