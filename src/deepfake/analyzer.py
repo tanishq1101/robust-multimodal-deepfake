@@ -376,7 +376,7 @@ def timeline_figure(res: dict) -> np.ndarray | None:
     if not (has_face or has_voice):
         return None
     duration = res["info"].get("duration") or (voice["seconds"] if voice else 1.0) or 1.0
-    fig, ax = plt.subplots(figsize=(9, 2.6), dpi=110, facecolor=PAPER)
+    fig, ax = plt.subplots(figsize=(9, 3.0), dpi=110, facecolor=PAPER)
     if has_voice:
         for w in voice["windows"]:
             ax.plot([w["start"], w["end"]], [w["p_fake"]] * 2, color=COLORS["voice"], linewidth=5,
@@ -398,6 +398,6 @@ def timeline_figure(res: dict) -> np.ndarray | None:
     ax.set_xlabel("time in the clip (s)", fontsize=8, color=COLORS["muted"])
     ax.set_ylabel("P(fake)", fontsize=8, color=COLORS["muted"])
     _style(ax)
-    ax.legend(fontsize=7.5, frameon=False, loc="upper left", bbox_to_anchor=(1.0, 1.0))
+    ax.legend(fontsize=7.5, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3)
     fig.tight_layout()
     return figure_to_array(fig)

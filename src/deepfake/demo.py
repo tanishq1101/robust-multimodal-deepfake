@@ -144,8 +144,10 @@ def _meter(p: float | None, t: float) -> str:
     mark = "" if p is None else f'<div class="wm-mark" style="left:{100 * p:.1f}%" title="score"></div>'
     return (f'<div class="wm-meter"><div class="wm-track">{"".join(cells)}'
             f'<div class="wm-thr" style="left:{100 * t:.1f}%" title="threshold"></div>{mark}</div>'
-            f'<div class="wm-scale"><span>0% real</span><span>dashed line: threshold {_pct(t)}</span>'
-            f'<span>100% fake</span></div></div>')
+            f'<div class="wm-scale"><span>0% · real</span><span>fake · 100%</span></div>'
+            f'<div class="wm-legend"><span><i class="k-mark"></i>score'
+            f'{": " + _pct(p) if p is not None else " (none)"}</span>'
+            f'<span><i class="k-thr"></i>threshold: {_pct(t)}</span></div></div>')
 
 
 def verdict_html(res: dict | None, kind: str = "video", truth: dict | None = None) -> str:
@@ -583,7 +585,7 @@ def _code_tab(run: dict | None):
         gr.HTML(f'<div class="wm-code-head"><i>{i + 1}</i><div><b>{_esc(s["title"])}</b>'
                 f'<p>{_esc(s["text"])}{where}</p></div></div>')
         gr.Code(**_kw(gr.Code, value=s["code"], language=s["language"], interactive=False, show_label=False,
-                      label=s["title"], lines=1, max_lines=40))
+                      label=s["title"], lines=1, max_lines=40, elem_classes="wm-codebox"))
 
 
 def create_demo(analyzer: Analyzer) -> gr.Blocks:

@@ -11,6 +11,8 @@ shadow, so cards read like printed stickers on paper.
 
 from __future__ import annotations
 
+import inspect
+
 import gradio as gr
 
 FLESH = gr.themes.Color(c50="#fff1f1", c100="#ffe1e1", c200="#ffc6c8", c300="#fb9da3", c400="#f2727d",
@@ -26,12 +28,13 @@ PITH = gr.themes.Color(c50="#fcfaf5", c100="#f6f1e7", c200="#ebe3d3", c300="#d9c
 COLORS = {"fake": "#cc3048", "real": "#2f6d36", "unsure": "#b7791f", "ink": "#1f1b16",
           "muted": "#6b6253", "line": "#d9cfbb"}
 
-THEME = gr.themes.Base(
+_LIGHT = dict(
     primary_hue=FLESH, secondary_hue=RIND, neutral_hue=PITH,
     radius_size=gr.themes.sizes.radius_md, spacing_size=gr.themes.sizes.spacing_md,
     font=[gr.themes.GoogleFont("Work Sans"), "ui-sans-serif", "system-ui", "sans-serif"],
     font_mono=[gr.themes.GoogleFont("JetBrains Mono"), "ui-monospace", "Menlo", "monospace"],
-).set(
+)
+_VARS = dict(
     body_background_fill="#f6f1e7", body_text_color="#1f1b16", body_text_color_subdued="#6b6253",
     background_fill_primary="#fffdf8", background_fill_secondary="#fcfaf5",
     block_background_fill="#fffdf8", block_border_color="#d9cfbb", block_border_width="1.5px",
@@ -48,10 +51,41 @@ THEME = gr.themes.Base(
     slider_color="#cc3048", checkbox_label_background_fill_selected="#ddeedd",
     color_accent="#2f6d36", color_accent_soft="#ddeedd", link_text_color="#2f6d36",
     link_text_color_hover="#a9243a", table_even_background_fill="#fcfaf5", table_odd_background_fill="#fffdf8",
+    body_text_color_strong="#1f1b16", block_info_text_color="#6b6253", code_background_fill="#fcfaf5",
+    panel_background_fill="#fcfaf5", panel_border_color="#d9cfbb", checkbox_background_color="#fffdf8",
+    checkbox_border_color="#d9cfbb", input_placeholder_color="#807562", accordion_text_color="#1f1b16",
+    table_text_color="#1f1b16", table_border_color="#d9cfbb", button_cancel_background_fill="#fffdf8",
 )
+
+
+def _build_theme() -> gr.themes.Base:
+    """The design is light only: every *_dark variable gets the light value, so an OS in dark mode
+    does not put light text on the cream cards."""
+    theme = gr.themes.Base(**_LIGHT)
+    accepted = inspect.signature(theme.set).parameters
+    theme.set(**{k: v for k, v in _VARS.items() if k in accepted})
+    dark = {}
+    for name in accepted:
+        if name.endswith("_dark") and hasattr(theme, name[:-5]):
+            value = getattr(theme, name[:-5])
+            if isinstance(value, str):
+                dark[name] = value
+    theme.set(**dark)
+    return theme
+
+
+THEME = _build_theme()
 
 CSS = """
 .gradio-container {max-width: 1240px !important; margin: 0 auto !important;}
+:root, .dark {color-scheme: light;}
+[class*="wm-"], [class*="wm-"] * {box-sizing: border-box;}
+.wm-card, .wm-plain, .wm-stat, .wm-tile, .wm-table-wrap, .wm-code-head, .wm-models, .wm-grid2, .wm-empty
+  {color: #1f1b16; min-width: 0; overflow-wrap: anywhere; word-break: normal;}
+.wm-card code, .wm-plain code, .wm-lead code {background: #f6f1e7; color: #4b443a; padding: 1px 5px; border-radius: 4px;
+  font-size: 0.82em; overflow-wrap: anywhere;}
+.wm-models > *, .wm-grid2 > *, .wm-strip > *, .wm-tiles > *, .wm-dl > *, .wm-steps > * {min-width: 0;}
+.prose .wm-card h3, .wm-card h3 {color: #1f1b16; margin-top: 0;}
 .gradio-container h1, .gradio-container h2, .gradio-container h3, .wm-serif
   {font-family: 'Fraunces', Georgia, 'Times New Roman', serif; letter-spacing: -0.01em;}
 footer {display: none !important;}
@@ -70,7 +104,7 @@ footer {display: none !important;}
 .wm-led {width: 8px; height: 8px; border-radius: 2px; display: inline-block;}
 .wm-led.on {background: #8fc391;} .wm-led.off {background: #807562;}
 
-.wm-strip {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0 4px;}
+.wm-strip {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; margin: 12px 0 4px;}
 .wm-stat {background: #fffdf8; border: 1.5px solid #d9cfbb; border-radius: 10px; padding: 10px 14px;}
 .wm-stat b {display: block; font-family: 'Fraunces', Georgia, serif; font-size: 1.45rem; font-weight: 600;
   font-variant-numeric: tabular-nums; color: #1f1b16; line-height: 1.15;}
@@ -85,6 +119,7 @@ footer {display: none !important;}
 .wm-card {background: #fffdf8; border: 1.5px solid #1f1b16; border-radius: 12px; padding: 18px 20px;
   box-shadow: 3px 3px 0 #d9cfbb;}
 .wm-card + .wm-card {margin-top: 12px;}
+.wm-models > .wm-card, .wm-grid2 > .wm-card {margin-top: 0 !important;}
 .wm-plain {background: #fffdf8; border: 1.5px solid #d9cfbb; border-radius: 12px; padding: 16px 18px;}
 .wm-kicker {display: flex; align-items: center; gap: 9px; font-size: 0.75rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.08em; color: #6b6253; margin: 0 0 10px;}
@@ -107,10 +142,10 @@ footer {display: none !important;}
   letter-spacing: 0.08em; text-transform: uppercase;}
 
 /* ---------- verdict ---------- */
-.wm-verdict {display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start;}
+.wm-verdict {display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 18px; align-items: flex-start;}
 .wm-word {font-family: 'Fraunces', Georgia, serif; font-size: 2.3rem; font-weight: 700; line-height: 1; letter-spacing: 0.01em;}
 .wm-label {margin-top: 6px; font-size: 0.95rem; color: #4b443a;}
-.wm-num {text-align: right; font-family: 'Fraunces', Georgia, serif; font-size: 2.3rem; font-weight: 600;
+.wm-num {text-align: right; margin-left: auto; font-family: 'Fraunces', Georgia, serif; font-size: 2.3rem; font-weight: 600;
   line-height: 1; font-variant-numeric: tabular-nums;}
 .wm-num small {display: block; font-family: 'Work Sans', sans-serif; font-size: 0.74rem; font-weight: 500;
   color: #6b6253; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.06em;}
@@ -120,14 +155,18 @@ footer {display: none !important;}
 .wm-tag.g {color: #2f6d36; background: #ddeedd;} .wm-tag.r {color: #a9243a; background: #ffe1e1;}
 .wm-tag.y {color: #8a5a12; background: #fbefd5;} .wm-tag.n {color: #4b443a; background: #f6f1e7;}
 
-.wm-meter {margin: 18px 0 4px;}
+.wm-meter {margin: 22px 0 4px; padding-top: 2px;}
 .wm-track {position: relative; height: 16px; display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px;}
 .wm-track span {border-radius: 3px; background: #ebe3d3;}
 .wm-track span.lit-g {background: #5fa564;} .wm-track span.lit-r {background: #e4485b;}
 .wm-mark {position: absolute; top: -7px; width: 0; height: 30px; border-left: 3px solid #1f1b16; transform: translateX(-1.5px);}
 .wm-mark::after {content: ""; position: absolute; top: -6px; left: -7.5px; border: 6px solid transparent; border-top-color: #1f1b16;}
 .wm-thr {position: absolute; top: -4px; height: 24px; border-left: 2px dashed #6b6253;}
-.wm-scale {display: flex; justify-content: space-between; font-size: 0.74rem; color: #6b6253; margin-top: 6px;}
+.wm-scale {display: flex; justify-content: space-between; gap: 12px; font-size: 0.74rem; color: #6b6253; margin-top: 8px;}
+.wm-legend {display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.76rem; color: #6b6253; margin-top: 4px;}
+.wm-legend span {display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;}
+.wm-legend .k-mark {width: 0; height: 12px; border-left: 3px solid #1f1b16;}
+.wm-legend .k-thr {width: 0; height: 12px; border-left: 2px dashed #6b6253;}
 .wm-why {margin: 14px 0 0; padding: 0; list-style: none;}
 .wm-why li {position: relative; padding: 5px 0 5px 20px; font-size: 0.92rem; line-height: 1.45; border-top: 1px dotted #d9cfbb;}
 .wm-why li:first-child {border-top: none;}
@@ -139,7 +178,7 @@ footer {display: none !important;}
 .wm-truth b {display: block; margin-bottom: 2px;}
 
 /* ---------- evidence ---------- */
-.wm-row {display: grid; grid-template-columns: 150px 1fr 70px; gap: 12px; align-items: center;
+.wm-row {display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) 64px; gap: 12px; align-items: center;
   padding: 10px 0; border-bottom: 1px solid #ebe3d3;}
 .wm-row:last-of-type {border-bottom: none;}
 .wm-row strong {display: block; font-size: 0.95rem;}
@@ -149,7 +188,7 @@ footer {display: none !important;}
 .wm-bar > i {position: absolute; top: -4px; bottom: -4px; border-left: 2px dashed #6b6253;}
 .wm-val {text-align: right; font-weight: 700; font-variant-numeric: tabular-nums;}
 .wm-na {color: #807562; font-size: 0.85rem;}
-.wm-dl {display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 14px 0 0;}
+.wm-dl {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; margin: 14px 0 0;}
 .wm-dl div {background: #fcfaf5; border: 1px solid #ebe3d3; border-radius: 8px; padding: 8px 10px;}
 .wm-dl dt {font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b6253;}
 .wm-dl dd {margin: 2px 0 0; font-weight: 600; font-size: 0.9rem; overflow-wrap: anywhere;}
@@ -175,15 +214,16 @@ table.wm-table td.num, table.wm-table th.num {text-align: right; font-variant-nu
 .wm-mini > span {position: absolute; left: 0; top: 0; bottom: 0;}
 
 /* ---------- models ---------- */
-.wm-models {display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;}
+.wm-models {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px;
+  align-items: start; margin-bottom: 14px;}
 .wm-models h3 {margin: 0 0 4px; font-size: 1.15rem;}
 .wm-badge {display: inline-block; font-family: 'Work Sans', sans-serif; padding: 2px 8px; border-radius: 5px;
   font-size: 0.7rem; font-weight: 700; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em;}
 .wm-badge.own {background: #ffe1e1; color: #a9243a;} .wm-badge.ext {background: #ddeedd; color: #27572d;}
-.wm-spec {display: grid; grid-template-columns: 120px 1fr; gap: 0; margin: 12px 0 0; font-size: 0.88rem;}
+.wm-spec {display: grid; grid-template-columns: minmax(96px, 30%) minmax(0, 1fr); column-gap: 14px; gap: 0; margin: 12px 0 0; font-size: 0.88rem;}
 .wm-spec dt, .wm-spec dd {padding: 7px 0; border-top: 1px solid #ebe3d3; margin: 0;}
 .wm-spec dt {color: #6b6253;}
-.wm-tiles {display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;}
+.wm-tiles {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 10px; margin-bottom: 6px;}
 .wm-tile {background: #fffdf8; border: 1.5px solid #d9cfbb; border-radius: 10px; padding: 12px 14px;}
 .wm-tile span {display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b6253;}
 .wm-tile b {display: block; font-family: 'Fraunces', Georgia, serif; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums;}
@@ -194,17 +234,22 @@ table.wm-table td.num, table.wm-table th.num {text-align: right; font-variant-nu
 .wm-cm .ok {background: #ddeedd; color: #1c3a22;} .wm-cm .bad {background: #ffe1e1; color: #8b2035;}
 
 /* ---------- code ---------- */
-.wm-code-head {display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; margin: 22px 0 8px;}
+.wm-code-head {display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; margin: 22px 0 8px;}
 .wm-code-head > i {font-style: normal; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px;
   background: #cc3048; color: #fffdf8; font-weight: 700; border: 1.5px solid #1f1b16;}
 .wm-code-head b {display: block; font-size: 1rem;}
 .wm-code-head p {margin: 2px 0 0; color: #6b6253; font-size: 0.86rem; line-height: 1.45;}
 .wm-code-head code {font-size: 0.76rem; background: #f6f1e7; padding: 1px 6px; border-radius: 4px; color: #4b443a;}
+.wm-code-head code {display: inline-block; margin-top: 4px;}
+.wm-codebox {border: 1.5px solid #d9cfbb !important; border-radius: 10px !important; overflow: hidden;}
+.wm-codebox .cm-scroller {padding-top: 34px !important; line-height: 1.55 !important;}
+.wm-codebox .cm-content, .wm-codebox .cm-gutters {font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace !important;
+  font-size: 13px !important;}
 .wm-group {font-family: 'Fraunces', Georgia, serif; font-size: 1.3rem; font-weight: 600; margin: 26px 0 0;
   padding-bottom: 6px; border-bottom: 2px solid #1f1b16;}
 
 /* ---------- method ---------- */
-.wm-grid2 {display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px;}
+.wm-grid2 {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 14px; align-items: start;}
 .wm-pipe {list-style: none; margin: 8px 0 0; padding: 0; counter-reset: s;}
 .wm-pipe li {counter-increment: s; position: relative; padding: 9px 0 9px 40px; border-top: 1px solid #ebe3d3; font-size: 0.9rem; line-height: 1.45;}
 .wm-pipe li:first-child {border-top: none;}
@@ -226,14 +271,22 @@ table.wm-table td.num, table.wm-table th.num {text-align: right; font-variant-nu
   .wm-stack > * {min-width: 0 !important; width: 100% !important; flex: 1 1 auto !important;}
 }
 @media (max-width: 560px) {
+  .wm-row {grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px;}
+  .wm-row > .wm-bar, .wm-row > .wm-na:not(.wm-val) {grid-column: 1 / -1; grid-row: 2;}
+  .wm-num {text-align: left; margin-left: 0;}
   .wm-top {grid-template-columns: 1fr; padding: 16px;} .wm-top .wm-logo {width: 40px; height: 40px;}
   .wm-top h1 {font-size: 1.3rem;}
-  .wm-word, .wm-num {font-size: 1.8rem;} .wm-row {grid-template-columns: 96px 1fr 56px; gap: 8px;}
+  .wm-word, .wm-num {font-size: 1.8rem;}
   .wm-steps {grid-template-columns: 1fr;} .wm-spec {grid-template-columns: 1fr;} .wm-spec dd {border-top: none; padding-top: 0;}
 }
 """
 
-HEAD = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+FORCE_LIGHT = ("<script>(function(){var d=function(){[document.documentElement,document.body].forEach("
+               "function(e){if(e&&e.classList.contains('dark'))e.classList.remove('dark');});};d();"
+               "new MutationObserver(d).observe(document.documentElement,{attributes:true,subtree:true,"
+               "attributeFilter:['class']});})();</script>")
+
+HEAD = FORCE_LIGHT + ('<link rel="preconnect" href="https://fonts.googleapis.com">'
         '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700'
         '&display=swap" rel="stylesheet">')
 
