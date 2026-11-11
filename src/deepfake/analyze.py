@@ -68,7 +68,7 @@ def run_samples(analyzer: Analyzer, out: Path, threshold: float) -> pd.DataFrame
     md = ["# Demo samples: results", "",
           f"- Face model: {caps['face_model'] or 'none'}",
           f"- Voice model: {caps['voice_model'] or 'none'}",
-          f"- Threshold: {threshold:.2f}; video verdict = max(face, voice) unless a fusion model is loaded",
+          f"- Threshold: {threshold:.2f}; video verdict = fuse_video (face OR voice; a borderline score cannot overrule a confident one) unless a fusion model is loaded; face scores average each face with its mirror image",
           f"- Correct: **{n_ok} / {len(df)}**", "", df.to_markdown(index=False)]
     (out / "results.md").write_text("\n".join(md) + "\n")
     print(f"\n{n_ok}/{len(df)} correct · saved {out / 'results.md'}")

@@ -7,7 +7,12 @@ import pytest
 
 from deepfake import model_card
 from deepfake.config import REPO_ROOT
-from deepfake.demo import confusion_html, metric_tiles, training_command
+from deepfake.code_view import training_steps
+from deepfake.demo import confusion_html, metric_tiles
+
+
+def training_command(run):
+    return "\n".join(step["code"] for step in training_steps(run))
 
 PUBLISHED = REPO_ROOT / "models" / "audio_asvspoof_3a53cf51"
 
@@ -43,7 +48,7 @@ def test_split_table_from_confusion_matrix(tmp_path):
     run = model_card.load_run(ckpt)
     table = model_card.split_table(run)
     assert table.to_dict("records")[1] == {"Split": "test", "Source": "", "Clips": 10, "Fake": 5, "Real": 5}
-    assert "1 false alarms on 5 real clips; 2 missed fakes out of 5" in confusion_html(run)
+    assert "1 false alarms on 5 real clips. 2 missed fakes out of 5" in confusion_html(run)
 
 
 @pytest.mark.skipif(not (PUBLISHED / "config.json").exists(), reason="published run folder not present")

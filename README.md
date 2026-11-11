@@ -38,7 +38,7 @@ flowchart LR
 | **Fusion** | late (weighted / max / noisy-OR, tuned on validation) and intermediate (MLP, modality dropout) |
 | **Robustness** | JPEG, H.264, blur, noise, downscaling, MP3, audio noise × 3 severities + missing modality; robust training |
 | **Explainability** | Grad-CAM on face frames and spectrogram, also for the fused decision; example gallery |
-| **Demo** | Gradio app: upload a video → verdict, face/voice scores, heatmaps |
+| **Demo** | Gradio app in a watermelon palette: upload a video, audio clip or photo → verdict, evidence strength, face/voice scores, timeline, heatmaps, JSON report |
 | **Report** | `python -m deepfake.report` gathers every finished run into `results.md` + figures |
 
 ## Quick start
@@ -108,21 +108,37 @@ python -m deepfake.analyze --samples      # every demo sample against its ground
 ```
 ![Demo app: video analysis](reports/figures/demo_app.png)
 
+| Audio | Photo |
+|---|---|
+| ![Audio analysis](reports/figures/demo_app_audio.png) | ![Photo analysis](reports/figures/demo_app_image.png) |
+
 | Tab | What it does |
 |---|---|
-| **Video** | Face model on 16 frames + voice model on 4 s windows of the soundtrack. Verdict with a probability gauge, both scores, a score-over-time chart, Grad-CAM on faces and on the spectrogram. *Decision settings*: threshold, and whether the verdict uses face + voice (max rule), face only or voice only. |
+| **Video** | Face model on 16 frames + voice model on 4 s speech windows of the soundtrack. Verdict card with a segmented score meter, evidence strength (strong / moderate / borderline), whether face and voice agree, and the reasons line by line. Evidence views: timeline, face Grad-CAM, spectrogram Grad-CAM, raw result with a JSON download. *Decision settings*: threshold, and whether the verdict uses face + voice, face only or voice only. |
 | **Audio** | Upload or record speech: per-window scores, spectrogram Grad-CAM. |
-| **Image** | The most prominent face is detected, boxed and scored, with Grad-CAM. |
-| **Samples** | All labelled demo clips in one table against their ground truth. |
-| **Models** | What each model is, its training data, metrics, confusion matrix, per-attack results, curves and ROC. |
-| **Code / About** | Training command and key source; how to read the results, limitations, sources. |
+| **Photo** | The most prominent face is detected, boxed and scored, with Grad-CAM. |
+| **Benchmark** | All labelled demo clips in one table against their ground truth, with per-type totals. |
+| **Models** | What each model is, how a video verdict is formed, training data, metrics, confusion matrix, per-attack results, curves and ROC. |
+| **Code** | Usage, the key source functions and the training commands, each in its own numbered block, without comments or docstrings. |
+| **Method** | Pipeline step by step, how to read a result, limitations, sources. |
 
 Each tab has the labelled samples one click away; their ground truth is shown next to the verdict,
 including the cases the models get wrong. Result on the 11 samples at threshold 0.5:
-**9 / 11 correct** ([reports/demo_samples/results.md](reports/demo_samples/results.md)). The two
-errors are both the voice model calling genuine speech fake: the real LJ Speech recording, and
-the real DFDC video, where a voice score of 0.515 tips the max rule. With *face only* that video
-is judged REAL.
+**10 / 11 correct** ([reports/demo_samples/results.md](reports/demo_samples/results.md)), up from
+9 / 11 with the old plain max rule.
+
+**What changed in the decision (inference only, no retraining):**
+- **Video fusion** (`deepfake.analyzer.fuse_video`): still fake if the face *or* the voice is fake,
+  but a score within 0.10 of the threshold cannot overrule a confident score from the other model.
+  This fixes the genuine DFDC video (face 1.3%, voice 51.5%, previously FAKE). It is one sample and
+  the rule was written with it in view, so treat it as a sanity check, not a measured accuracy gain.
+- **Face test-time augmentation**: each face is scored with its mirror image and the logits are
+  averaged. Sample scores moved by at most 0.1 point; there is no labelled face set here to measure it on.
+- **Speech windows**: 4 s windows that are mostly silence are left out of the voice score. No
+  measurable effect on the 95-clip out-of-domain test (AUC 0.586 before and after).
+- **Still wrong:** the genuine LJ Speech recording (voice 92.2%). Trimming, padding, loudness
+  normalisation, dither and band-limiting were all tried on the 95 out-of-domain clips; none made
+  genuine speech score low (best AUC 0.72, on 10 genuine clips). That needs retraining on more varied real speech.
 
 It returns `INCONCLUSIVE` when nothing can be judged (no face in a photo, a silent clip). It is
 a research prototype: scores are model estimates, not forensic proof.
@@ -167,7 +183,9 @@ src/deepfake/
   face_model.py           pretrained DFDC face-swap detector (EfficientNet-B7), Grad-CAM
   analyzer.py             video / audio / image analysis used by the app; analyze.py is its CLI
   model_card.py           reads a run folder (config, data, metrics, history) for the demo
-  demo.py                 Gradio UI
+  demo.py                 Gradio UI (layout and handlers)
+  demo_theme.py           watermelon theme, CSS and logo for the UI
+  code_view.py            comment-free source snippets for the Code tab
   report.py               results.md + figures from all runs
 app/app.py                demo launcher
 demo_samples/             labelled demo videos, audio and images (sources in its README)

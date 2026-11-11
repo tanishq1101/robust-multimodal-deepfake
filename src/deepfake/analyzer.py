@@ -6,10 +6,11 @@ Which model judges what:
   voice  this project's voice model (task `audio`, or the audio branch of a fusion model)
 
   video  face model on up to 16 evenly spaced frames + voice model on the soundtrack. With a
-         trained fusion checkpoint its fused score decides; otherwise the late-fusion `max` rule
-         (fake if the face OR the voice is fake), the same rule used by deepfake.models.fusion
-  audio  voice model on overlapping 4 s windows across the first 30 s; P(fake) is the mean
-  image  face model on the most prominent face
+         trained fusion checkpoint its fused score decides; otherwise `fuse_video`: fake if the
+         face OR the voice is fake, except that a borderline score cannot overrule a confident one
+  audio  voice model on overlapping 4 s windows across the first 30 s; P(fake) is the mean over
+         the windows that contain speech (`speech_windows`)
+  image  face model on the most prominent face (and its mirror image, see FaceSwapDetector.tta)
 
 Every result has the same shape (see Analyzer.analyse), so the UI and the JSON output do not
 depend on the input type.
@@ -43,12 +44,17 @@ VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg"}
 MAX_AUDIO_SECONDS = 30.0
 WINDOW_HOP_SECONDS = 2.0
 FAKE, REAL, INCONCLUSIVE = "FAKE", "REAL", "INCONCLUSIVE"
-VIDEO_RULES = {"max": "face + voice (max rule)", "face": "face only", "voice": "voice only"}
+VIDEO_RULES = {"max": "face + voice", "face": "face only", "voice": "voice only"}
+BORDERLINE = 0.10
+MIN_SPEECH_FRACTION = 0.3
+SILENCE_DB = 35.0
 # Measured by scripts/eval_voice_generalization.py (reports/voice_generalization.md)
 VOICE_CAVEAT = ("The voice model was trained on ASVspoof 2019 studio speech and over-flags genuine speech "
                 "recorded elsewhere (all 10 real LJ Speech / VCTK test recordings scored above 0.9). Treat a "
                 "FAKE that rests on the voice alone with caution.")
-COLORS = {"face": "#7c3aed", "voice": "#0891b2", "threshold": "#64748b"}
+COLORS = {"face": "#2d6a4f", "voice": "#b5476b", "threshold": "#57534e", "ink": "#1c1917",
+          "muted": "#78716c", "grid": "#ece6da", "axis": "#d6cfc2"}
+PAPER = "#fffdf8"
 
 
 def media_kind(path: str | Path) -> str:
@@ -62,6 +68,42 @@ def media_kind(path: str | Path) -> str:
 
 def _verdict(p: float | None, threshold: float) -> str:
     return INCONCLUSIVE if p is None else (FAKE if p >= threshold else REAL)
+
+
+def fuse_video(p_face: float | None, p_voice: float | None, threshold: float,
+               margin: float = BORDERLINE) -> tuple[float | None, str]:
+    """Face and voice P(fake) -> (video P(fake), what decided it).
+
+    A video is fake if its face or its voice is fake, so the more suspicious score normally wins.
+    When the two disagree and the fake-side score sits within `margin` of the threshold while the
+    real-side score is clearly below it, the borderline score does not flip the verdict.
+    """
+    if p_face is None or p_voice is None:
+        if p_face is not None:
+            return p_face, "face"
+        return (p_voice, "voice") if p_voice is not None else (None, "nothing")
+    if (p_face >= threshold) == (p_voice >= threshold):
+        return max(p_face, p_voice), "face + voice"
+    fake_name, p_fake, real_name, p_real = (("face", p_face, "voice", p_voice) if p_face >= threshold
+                                            else ("voice", p_voice, "face", p_face))
+    if p_fake - threshold < margin <= threshold - p_real:
+        return p_real, f"{real_name} ({fake_name} borderline)"
+    return p_fake, f"{fake_name} (face + voice)"
+
+
+def speech_windows(wav: np.ndarray, starts: list[int], win: int, hop: int,
+                   min_fraction: float = MIN_SPEECH_FRACTION, silence_db: float = SILENCE_DB) -> np.ndarray:
+    """Boolean mask over windows: True where at least `min_fraction` of the frames are speech.
+
+    A frame counts as speech when its RMS energy is within `silence_db` of the loudest frame. If no
+    window qualifies, every window is used.
+    """
+    rms = np.sqrt(np.convolve(wav.astype(np.float64) ** 2, np.ones(hop * 2) / (hop * 2), "same")[::hop] + 1e-12)
+    db = 20 * np.log10(rms)
+    voiced = db > db.max() - silence_db
+    mask = np.array([voiced[s:s + win].mean() >= min_fraction if len(voiced[s:s + win]) else False
+                     for s in starts])
+    return mask if mask.any() else np.ones(len(starts), bool)
 
 
 class Analyzer:
@@ -150,12 +192,15 @@ class Analyzer:
         with torch.no_grad():
             logits = model(x)["logit"].flatten()
         scores = torch.sigmoid(logits).cpu().numpy()
-        for s, p in zip(starts, scores):
-            branch["windows"].append({"start": round(s * hop / sr, 2),
+        speech = speech_windows(wav, starts, win, hop)
+        for s, p, sp in zip(starts, scores, speech):
+            branch["windows"].append({"start": round(s * hop / sr, 2), "speech": bool(sp),
                                       "end": round(min(s + win, mel.shape[1]) * hop / sr, 2), "p_fake": float(p)})
-        branch["p_fake"] = float(scores.mean())
+        branch["p_fake"] = float(scores[speech].mean())
+        branch["speech_windows"] = int(speech.sum())
         if with_explanation:
-            k = int(np.argmax(scores) if branch["p_fake"] >= threshold else np.argmin(scores))
+            masked = np.where(speech, scores, np.nan)
+            k = int(np.nanargmax(masked) if branch["p_fake"] >= threshold else np.nanargmin(masked))
             batch = {"frames": torch.zeros(1, 1, 3, 8, 8, device=det.device), "mel": x[k:k + 1]}
             target = "fake" if branch["p_fake"] >= threshold else "real"
             exp = explain(model, "audio", batch, target=target)
@@ -179,11 +224,11 @@ class Analyzer:
         """Returns:
           kind          "video" | "audio" | "image"
           verdict       FAKE | REAL | INCONCLUSIVE, p_fake (None if inconclusive), threshold
-          decided_by    what produced p_fake ("face", "voice", "face + voice (max rule)", "fusion model")
+          decided_by    what produced p_fake ("face", "voice", "face + voice", "fusion model", ...)
           face, voice   branch dicts or None: model, p_fake, per-frame / per-window scores, evidence images
           info          file name, duration, frames, faces found, audio seconds
           warnings      human-readable caveats
-        video_rule: "max" (fake if face OR voice is fake), "face" or "voice": which branches decide a
+        video_rule: "max" (fuse_video: fake if face OR voice is fake), "face" or "voice": which branches decide a
         video when no trained fusion model is loaded. Both branch scores are reported either way.
           timeline      RGB array: per-frame and per-window scores over time (video and audio)
         """
@@ -233,15 +278,21 @@ class Analyzer:
             elif kind == "audio":
                 warnings.append("No voice model is loaded, so audio files cannot be judged.")
 
-        if kind == "video" and fused is None and video_rule != "max":
-            p, decided_by = _combine(face if video_rule == "face" else None,
-                                     voice if video_rule == "voice" else None, None)
-        else:
-            p, decided_by = _combine(face, voice, fused)
         voice_p = voice["p_fake"] if voice else None
         face_p = face["p_fake"] if face else None
+        if fused is not None:
+            p, decided_by = fused, "fusion model"
+        elif kind == "video" and video_rule != "max":
+            p, decided_by = fuse_video(face_p if video_rule == "face" else None,
+                                       voice_p if video_rule == "voice" else None, threshold)
+        else:
+            p, decided_by = fuse_video(face_p, voice_p, threshold)
+        if "borderline" in decided_by:
+            warnings.append(f"The face and voice models disagree. The {decided_by.split('(')[1].split()[0]} score "
+                            f"is within {BORDERLINE:.0%} of the threshold, so the confident "
+                            f"{decided_by.split()[0]} score decides.")
         if (self.voice_source and voice_p is not None and voice_p >= threshold and p is not None
-                and p >= threshold and decided_by != "face" and (face_p is None or face_p < threshold)):
+                and p >= threshold and not decided_by.startswith("face") and (face_p is None or face_p < threshold)):
             warnings.append(VOICE_CAVEAT)
         if p is None and not any("cannot" in w or "could not" in w for w in warnings):
             warnings.append("Insufficient evidence: nothing in this file could be judged.")
@@ -272,23 +323,10 @@ class Analyzer:
             branch["explained_class"] = out["explained_class"]
             x, y, w, h = out["box"]
             boxed = rgb.copy()
-            cv2.rectangle(boxed, (x, y), (x + w, y + h), (124, 58, 237), max(2, rgb.shape[1] // 300))
+            cv2.rectangle(boxed, (x, y), (x + w, y + h), (45, 106, 79), max(2, rgb.shape[1] // 300))
             branch["annotated"] = boxed
         return branch
 
-
-def _combine(face: dict | None, voice: dict | None, fused: float | None) -> tuple[float | None, str]:
-    if fused is not None:
-        return fused, "fusion model"
-    pf = face["p_fake"] if face else None
-    pv = voice["p_fake"] if voice else None
-    if pf is not None and pv is not None:
-        return max(pf, pv), "face + voice (max rule)"
-    if pf is not None:
-        return pf, "face"
-    if pv is not None:
-        return pv, "voice"
-    return None, "nothing"
 
 
 def _video_info(path: Path) -> dict:
@@ -305,26 +343,27 @@ def _video_info(path: Path) -> dict:
 # --------------------------------------------------------------------------- figures
 
 def _style(ax):
+    ax.set_facecolor(PAPER)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.spines["left"].set_color("#cbd5e1")
-    ax.spines["bottom"].set_color("#cbd5e1")
-    ax.tick_params(colors="#475569", labelsize=8)
-    ax.grid(axis="y", color="#e2e8f0", linewidth=0.8)
+    ax.spines["left"].set_color(COLORS["axis"])
+    ax.spines["bottom"].set_color(COLORS["axis"])
+    ax.tick_params(colors=COLORS["muted"], labelsize=8)
+    ax.grid(axis="y", color=COLORS["grid"], linewidth=0.8)
     ax.set_axisbelow(True)
 
 
 def _spectrogram_figure(mel: np.ndarray, cam: np.ndarray, window: dict, target: str) -> np.ndarray:
-    fig, ax = plt.subplots(figsize=(9, 2.8), dpi=110)
+    fig, ax = plt.subplots(figsize=(9, 2.8), dpi=110, facecolor=PAPER)
     t0, t1 = window["start"], window["start"] + mel.shape[1] / 100
     ax.imshow(mel, origin="lower", aspect="auto", cmap="gray", extent=(t0, t1, 0, mel.shape[0]))
     ax.imshow(cam, origin="lower", aspect="auto", cmap="jet", alpha=0.42, vmin=0, vmax=1,
               extent=(t0, t1, 0, mel.shape[0]))
-    ax.set_xlabel("time (s)", fontsize=8, color="#475569")
-    ax.set_ylabel("mel band (low → high pitch)", fontsize=8, color="#475569")
+    ax.set_xlabel("time (s)", fontsize=8, color=COLORS["muted"])
+    ax.set_ylabel("mel band (low → high pitch)", fontsize=8, color=COLORS["muted"])
     ax.set_title(f"Spectrogram of the {window['start']:.0f}–{window['end']:.0f} s window, "
-                 f"heatmap = evidence for {target.upper()}", fontsize=9, color="#0f172a", loc="left")
-    ax.tick_params(colors="#475569", labelsize=8)
+                 f"heatmap = evidence for {target.upper()}", fontsize=9, color=COLORS["ink"], loc="left")
+    ax.tick_params(colors=COLORS["muted"], labelsize=8)
     fig.tight_layout()
     return figure_to_array(fig)
 
@@ -337,14 +376,15 @@ def timeline_figure(res: dict) -> np.ndarray | None:
     if not (has_face or has_voice):
         return None
     duration = res["info"].get("duration") or (voice["seconds"] if voice else 1.0) or 1.0
-    fig, ax = plt.subplots(figsize=(9, 2.6), dpi=110)
+    fig, ax = plt.subplots(figsize=(9, 2.6), dpi=110, facecolor=PAPER)
     if has_voice:
         for w in voice["windows"]:
             ax.plot([w["start"], w["end"]], [w["p_fake"]] * 2, color=COLORS["voice"], linewidth=5,
-                    alpha=0.55, solid_capstyle="butt")
-        mids = [(w["start"] + w["end"]) / 2 for w in voice["windows"]]
-        ax.plot(mids, [w["p_fake"] for w in voice["windows"]], "o", color=COLORS["voice"], markersize=4,
-                label=f"voice, 4 s windows (mean {voice['p_fake']:.0%})")
+                    alpha=0.55 if w.get("speech", True) else 0.15, solid_capstyle="butt")
+        used = [w for w in voice["windows"] if w.get("speech", True)]
+        ax.plot([(w["start"] + w["end"]) / 2 for w in used], [w["p_fake"] for w in used], "o",
+                color=COLORS["voice"], markersize=4,
+                label=f"voice, 4 s speech windows (mean {voice['p_fake']:.0%})")
     if has_face:
         xs = [f["position"] * duration for f in face["frames"]]
         ax.plot(xs, [f["p_fake"] for f in face["frames"]], "-o", color=COLORS["face"], markersize=4,
@@ -355,8 +395,8 @@ def timeline_figure(res: dict) -> np.ndarray | None:
     ax.set_xlim(0, max(duration, 0.1))
     ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
     ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"])
-    ax.set_xlabel("time in the clip (s)", fontsize=8, color="#475569")
-    ax.set_ylabel("P(fake)", fontsize=8, color="#475569")
+    ax.set_xlabel("time in the clip (s)", fontsize=8, color=COLORS["muted"])
+    ax.set_ylabel("P(fake)", fontsize=8, color=COLORS["muted"])
     _style(ax)
     ax.legend(fontsize=7.5, frameon=False, loc="upper left", bbox_to_anchor=(1.0, 1.0))
     fig.tight_layout()

@@ -126,9 +126,11 @@ class FaceSwapDetector:
     name = "DFDC-winning EfficientNet-B7 (Seferbekov, 2020)"
 
     def __init__(self, weights: str | Path = WEIGHTS, device: str | torch.device | None = None,
-                 face_detector: FaceDetector | None = None, score_threshold: float = 0.6):
+                 face_detector: FaceDetector | None = None, score_threshold: float = 0.6,
+                 tta: bool = True):
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.weights = Path(weights)
+        self.tta = tta
         model = DFDCClassifier()
         state = load_state_dict(self.weights)
         model.load_state_dict({re.sub(r"^module\.", "", k): v for k, v in state.items()}, strict=True)
@@ -149,10 +151,14 @@ class FaceSwapDetector:
 
     @torch.no_grad()
     def score_canvases(self, canvases: list[np.ndarray], batch_size: int = 4) -> np.ndarray:
-        """P(fake) for each prepared 380 x 380 face canvas."""
+        """P(fake) for each prepared 380 x 380 face canvas, averaged with its mirror image if `tta`."""
         out = []
         for i in range(0, len(canvases), batch_size):
-            out.append(torch.sigmoid(self.model(self._tensor(canvases[i:i + batch_size]))).flatten().cpu())
+            x = self._tensor(canvases[i:i + batch_size])
+            logits = self.model(x).flatten()
+            if self.tta:
+                logits = (logits + self.model(torch.flip(x, dims=[3])).flatten()) / 2
+            out.append(torch.sigmoid(logits).cpu())
         return torch.cat(out).numpy() if out else np.zeros(0)
 
     def gradcam(self, canvas: np.ndarray, target: str = "fake") -> np.ndarray:

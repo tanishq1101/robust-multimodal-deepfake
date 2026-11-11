@@ -15,7 +15,8 @@ import soundfile as sf
 import torch
 
 from deepfake import analyze, demo
-from deepfake.analyzer import VOICE_CAVEAT, Analyzer, media_kind
+from deepfake.analyzer import VOICE_CAVEAT, Analyzer, fuse_video, media_kind, speech_windows
+from deepfake.code_view import clean_source, snippets
 from deepfake.face_model import confident_mean, crop_face, load_state_dict, to_canvas
 from deepfake.inference import DeepfakeDetector
 
@@ -101,9 +102,9 @@ def test_load_state_dict_is_weights_only(tmp_path):
 def test_video_face_and_voice(voice, media):
     a = Analyzer(voice, StubFace(0.9))
     res = a.analyse(media["video"])
-    assert res["kind"] == "video" and res["decided_by"] == "face + voice (max rule)"
+    assert res["kind"] == "video" and "face" in res["decided_by"]
     assert res["face"]["faces_found"] == res["face"]["frames_sampled"] > 0
-    assert res["p_fake"] == pytest.approx(max(res["face"]["p_fake"], res["voice"]["p_fake"]))
+    assert res["p_fake"] == pytest.approx(fuse_video(res["face"]["p_fake"], res["voice"]["p_fake"], 0.5)[0])
     assert len(res["face"]["overlays"]) == 4 and res["timeline"].ndim == 3
     assert res["voice"]["spectrogram"].ndim == 3 and res["info"]["resolution"] == "320×240"
     # the video rule picks the branch; the threshold moves only the verdict
@@ -127,7 +128,8 @@ def test_audio_windows(voice, media):
     w = res["voice"]["windows"]
     assert res["kind"] == "audio" and res["face"] is None and res["decided_by"] == "voice"
     assert len(w) == 4 and w[0]["start"] == 0 and w[-1]["end"] == pytest.approx(9.0, abs=0.05)
-    assert res["p_fake"] == pytest.approx(np.mean([x["p_fake"] for x in w]))
+    assert res["p_fake"] == pytest.approx(np.mean([x["p_fake"] for x in w if x["speech"]]))
+    assert res["voice"]["speech_windows"] == sum(x["speech"] for x in w) > 0
 
 
 def test_inconclusive_cases(voice, media):
@@ -169,13 +171,14 @@ def test_gradio_ui(voice, media, monkeypatch):
     assert isinstance(demo.create_demo(a), gr.Blocks)
     no_progress = lambda *args, **kw: None                       # noqa: E731
     out = demo.make_handler(a, "video", [])(str(media["video"]), 0.5, "max", progress=no_progress)
-    verdict, evidence, timeline, faces, spec, raw, details = out
+    verdict, evidence, timeline, faces, spec, raw, report = out
     assert raw["verdict"] in verdict and "Face" in evidence and "Voice" in evidence
     assert timeline["visible"] and faces["visible"] and spec["visible"] and "overlays" not in raw["face"]
+    assert json.loads(open(report["value"]).read())["verdict"] == raw["verdict"]
     out = demo.make_handler(a, "image", [])(str(media["image"]), 0.5, progress=no_progress)
-    assert len(out) == 6 and out[3]["visible"]                  # verdict, evidence, faces, annotated, raw, md
+    assert len(out) == 6 and out[3]["visible"]                  # verdict, evidence, faces, annotated, raw, file
     out = demo.make_handler(a, "audio", [])(str(media["audio"]), 0.5, progress=no_progress)
-    assert len(out) == 6 and out[3]["visible"]                  # verdict, evidence, timeline, spec, raw, md
+    assert len(out) == 6 and out[3]["visible"]                  # verdict, evidence, timeline, spec, raw, file
     with pytest.raises(gr.Error):
         demo.make_handler(a, "video", [])(None, 0.5, progress=no_progress)
     assert "No analysis yet" in demo.verdict_html(None, "image")
@@ -190,3 +193,37 @@ def test_sample_truth_and_manifest():
         assert labels.count("real") == 1 and labels.count("fake") >= 2
     s = samples[0]
     assert demo.sample_truth(s["abs"], samples)["path"] == s["path"]
+
+
+def test_fuse_video():
+    assert fuse_video(0.9, 0.95, 0.5) == (0.95, "face + voice")             # agree: the higher score
+    assert fuse_video(0.1, 0.2, 0.5) == (0.2, "face + voice")
+    assert fuse_video(0.013, 0.515, 0.5) == (0.013, "face (voice borderline)")  # borderline cannot flip
+    assert fuse_video(0.013, 0.958, 0.5) == (0.958, "voice (face + voice)")     # clear fake voice wins
+    assert fuse_video(0.45, 0.55, 0.5) == (0.55, "voice (face + voice)")        # both borderline: fake side
+    assert fuse_video(None, 0.7, 0.5) == (0.7, "voice") and fuse_video(None, None, 0.5) == (None, "nothing")
+
+
+def test_speech_windows_skip_silence():
+    sr, hop, win = 16000, 160, 401
+    t = np.arange(sr * 4) / sr
+    wav = np.concatenate([0.3 * np.sin(2 * np.pi * 200 * t), np.zeros(sr * 6)]).astype(np.float32)
+    mask = speech_windows(wav, [0, 200, 400, 600], win, hop)
+    assert mask.tolist() == [True, True, False, False]
+    assert speech_windows(np.zeros(sr * 4, np.float32), [0], win, hop).tolist() == [True]
+
+
+def test_clean_source_drops_comments_and_docstrings():
+    src = '''def f(x):
+    """Docstring."""
+    # a comment
+    y = x + 1  # trailing
+
+
+    return "# not a comment"
+'''
+    assert clean_source(src) == 'def f(x):\n    y = x + 1\n\n    return "# not a comment"'
+    for s in snippets():
+        assert s["code"] and s["group"] and s["title"]
+        if s["language"] == "python" and s["where"]:
+            assert "#" not in s["code"].replace('"#', "") and '"""' not in s["code"]
